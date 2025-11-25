@@ -1,0 +1,102 @@
+{
+  "name": "Test data with a simple isosceles triangle",
+  "points": [
+    {
+      "id": "A",
+      "x": 666,
+      "y": 170.015625,
+      "notes": ""
+    },
+    {
+      "id": "B",
+      "x": 499,
+      "y": 424.015625,
+      "notes": ""
+    },
+    {
+      "id": "C",
+      "x": 834,
+      "y": 424.015625,
+      "notes": ""
+    }
+  ],
+  "edges": [
+    {
+      "points": [
+        "A",
+        "B"
+      ],
+      "notes": ""
+    },
+    {
+      "points": [
+        "A",
+        "C"
+      ],
+      "notes": ""
+    },
+    {
+      "points": [
+        "B",
+        "C"
+      ],
+      "notes": ""
+    }
+  ],
+  "circles": [
+    {
+      "centerPoint": "A",
+      "centerX": 666,
+      "centerY": 170.015625,
+      "radius": 303.9819073563425,
+      "pointsOnLine": [
+        "B",
+        "C"
+      ]
+    }
+  ],
+  "angles": [
+    {
+      "pointId": "A",
+      "sidepoints": [
+        "B",
+        "C"
+      ],
+      "value": "80",
+      "calculatedValue": 66.80547295916901,
+      "label": "",
+      "notes": ""
+    },
+    {
+      "pointId": "B",
+      "sidepoints": [
+        "A",
+        "C"
+      ],
+      "value": null,
+      "calculatedValue": 56.67586769595151,
+      "label": "",
+      "notes": ""
+    },
+    {
+      "pointId": "C",
+      "sidepoints": [
+        "A",
+        "B"
+      ],
+      "value": null,
+      "calculatedValue": 56.51865934487947,
+      "label": "",
+      "notes": ""
+    }
+  ],
+  "lines": [],
+  "triangles": [
+    [
+      "A",
+      "B",
+      "C"
+    ]
+  ],
+  "definitions": []
+}
