@@ -12,10 +12,6 @@ export class Canvas {
             this.showPointMenu(point);
         });
         
-        this.messagingHub.subscribe(Messages.POINT_NOTES_MENU_REQUESTED, (point) => {
-            this.showPointNotesMenu(point);
-        });
-        
         this.messagingHub.subscribe(Messages.ANGLE_EDIT_REQUESTED, (angleData) => {
             this.showAngleEditor(angleData);
         });
@@ -112,6 +108,7 @@ export class Canvas {
         // Buttons section
         const buttonsDiv = createElement('div', { class: 'point-menu-buttons' }, [
             createElement('button', { id: 'createPointBtn' }, ['Create']),
+            createElement('button', { id: 'movePointBtn' }, ['Move']),
             createElement('button', { id: 'cancelPointBtn' }, ['Cancel'])
         ]);
         
@@ -152,6 +149,13 @@ export class Canvas {
                 return;
             }
             
+            // Validate point still exists
+            if (!point || !point.id || !point.x || !point.y) {
+                this.messagingHub.emit(Messages.STATUS_UPDATED, '❌ Source point is no longer valid');
+                menu.remove();
+                return;
+            }
+            
             // Convert angle from degrees to radians using utility function
             const angleRadians = degreesToRadians(angleDegrees);
             
@@ -167,8 +171,9 @@ export class Canvas {
             }
             
             // Emit message to create the new point with edge
+            // Create a fresh copy of the point data to avoid stale references
             this.messagingHub.emit(Messages.POINT_CREATE_REQUESTED, {
-                fromPoint: point,
+                fromPoint: { id: point.id, x: point.x, y: point.y },
                 distance: distance,
                 angle: angleDegrees,
                 newX: newX,
@@ -183,6 +188,117 @@ export class Canvas {
         document.getElementById('cancelPointBtn').addEventListener('click', () => {
             menu.remove();
             this.messagingHub.emit(Messages.STATUS_UPDATED, 'Point creation cancelled');
+        });
+        
+        // Move button - constrained dragging along selected direction
+        document.getElementById('movePointBtn').addEventListener('click', () => {
+            const angleDegrees = parseFloat(angleInput.value) || 0;
+            const angleRadians = degreesToRadians(angleDegrees);
+            
+            // Direction vector (unit vector along the angle)
+            const dirX = Math.cos(angleRadians);
+            const dirY = Math.sin(angleRadians);
+            
+            // Store original position
+            const originalX = point.x;
+            const originalY = point.y;
+            
+            menu.remove();
+            this.messagingHub.emit(Messages.STATUS_UPDATED, `Moving ${point.id} along ${angleDegrees}° - drag to move, click to finish`);
+            
+            // Find the point's SVG group and circle element
+            const pointGroup = this.svg.querySelector(`g[data-point-id="${point.id}"]`);
+            const pointElement = pointGroup?.querySelector('.point-circle');
+            if (!pointGroup || !pointElement) {
+                this.messagingHub.emit(Messages.STATUS_UPDATED, '❌ Could not find point element');
+                return;
+            }
+            
+            pointElement.style.cursor = 'grabbing';
+            pointElement.classList.add('dragging');
+            
+            // Draw a guide line showing the constrained direction
+            const guideLength = 2000;
+            const guideLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            guideLine.setAttribute('x1', originalX - guideLength * dirX);
+            guideLine.setAttribute('y1', originalY - guideLength * dirY);
+            guideLine.setAttribute('x2', originalX + guideLength * dirX);
+            guideLine.setAttribute('y2', originalY + guideLength * dirY);
+            guideLine.setAttribute('stroke', '#ff6600');
+            guideLine.setAttribute('stroke-width', '1');
+            guideLine.setAttribute('stroke-dasharray', '5,5');
+            guideLine.setAttribute('opacity', '0.5');
+            guideLine.classList.add('move-guide-line');
+            this.svg.insertBefore(guideLine, this.svg.firstChild);
+            
+            const svgRect = this.svg.getBoundingClientRect();
+            
+            const onMouseMove = (e) => {
+                const mouseX = e.clientX - svgRect.left;
+                const mouseY = e.clientY - svgRect.top;
+                
+                // Project mouse position onto the direction line
+                // Vector from original point to mouse
+                const dx = mouseX - originalX;
+                const dy = mouseY - originalY;
+                
+                // Project onto direction vector: (dx,dy) · (dirX,dirY)
+                const projection = dx * dirX + dy * dirY;
+                
+                // New position along the constrained direction
+                const newX = Math.round(originalX + projection * dirX);
+                const newY = Math.round(originalY + projection * dirY);
+                
+                // Update point position
+                point.x = newX;
+                point.y = newY;
+                
+                // Update SVG element
+                pointElement.setAttribute('cx', newX);
+                pointElement.setAttribute('cy', newY);
+                
+                // Update label position during drag (same positioning as create)
+                const label = pointGroup.querySelector('.point-label');
+                if (label) {
+                    label.setAttribute('x', newX);
+                    label.setAttribute('y', newY - 15);
+                }
+                
+                // Update connected edges
+                this.messagingHub.emit(Messages.POINT_DRAGGING, { point });
+            };
+            
+            // Prevent click event from creating a new point during move
+            const onClickCapture = (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+            };
+            this.svg.addEventListener('click', onClickCapture, true);
+            
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                
+                // Remove click blocker after a short delay to catch the click event
+                setTimeout(() => {
+                    this.svg.removeEventListener('click', onClickCapture, true);
+                }, 10);
+                
+                pointElement.style.cursor = '';
+                pointElement.classList.remove('dragging');
+                
+                // Remove guide line
+                guideLine.remove();
+                
+                // Emit move completed to check edge/circle intersections
+                this.messagingHub.emit(Messages.POINT_MOVED, { point });
+                
+                this.messagingHub.emit(Messages.STATUS_UPDATED, `Point ${point.id} moved to (${point.x.toFixed(1)}, ${point.y.toFixed(1)})`);
+                this.messagingHub.emit(Messages.STATE_CHANGED);
+            };
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
         });
         
         // Handle Enter key
@@ -216,68 +332,6 @@ export class Canvas {
         }, 100);
     }
 
-    // Point Notes Popover
-    showPointNotesMenu = (point) => {
-        // Remove any existing point notes menu dialogs
-        document.querySelectorAll('.point-notes-menu-container').forEach(el => el.remove());
-        
-        // Get SVG bounding rect to position correctly
-        const svgRect = this.svg.getBoundingClientRect();
-        
-        // Notes textarea
-        const notesTextarea = createElement('textarea', {
-            id: 'pointNotes',
-            placeholder: 'Add notes for this point...',
-            style: 'width: 100%; min-height: 120px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-family: inherit; resize: vertical;'
-        });
-        notesTextarea.value = point.notes || '';
-        
-        // Assemble menu
-        const menu = createElement('div', { class: 'point-notes-menu-container' }, [
-            createElement('div', { class: 'point-menu-header' }, [`Notes for Point ${point.id}`]),
-            createElement('div', { class: 'point-notes-section' }, [notesTextarea]),
-            createElement('div', { class: 'point-menu-buttons' }, [
-                createElement('button', { id: 'saveNotesBtn' }, ['Save Notes']),
-                createElement('button', { id: 'closeNotesBtn' }, ['Close'])
-            ])
-        ]);
-        
-        // Position menu
-        menu.style.left = (svgRect.left + point.x + 20) + 'px';
-        menu.style.top = (svgRect.top + point.y - 20) + 'px';
-        
-        document.body.appendChild(menu);
-        
-        notesTextarea.focus();
-        
-        document.getElementById('saveNotesBtn').addEventListener('click', () => {
-            point.notes = notesTextarea.value.trim();
-            this.messagingHub.emit(Messages.POINT_NOTES_UPDATED, point);
-            menu.remove();
-        });
-        
-        document.getElementById('closeNotesBtn').addEventListener('click', () => {
-            menu.remove();
-        });
-        
-        // Handle Escape key
-        menu.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                menu.remove();
-            }
-        });
-        
-        // Close on outside click
-        setTimeout(() => {
-            document.addEventListener('click', function closeMenu(e) {
-                if (!menu.contains(e.target)) {
-                    menu.remove();
-                    document.removeEventListener('click', closeMenu);
-                }
-            });
-        }, 100);
-    }
-
     // Angle Edit Popover
     showAngleEditor = (angleData) => {
         // Remove any existing input dialogs
@@ -287,8 +341,11 @@ export class Canvas {
         
         // Get SVG bounding rect to position correctly
         const svgRect = this.svg.getBoundingClientRect();
-        const textX = parseFloat(angleData.textElement.getAttribute('x'));
-        const textY = parseFloat(angleData.textElement.getAttribute('y'));
+        
+        // Get text element from the group
+        const textElement = angleData.groupElement?.querySelector('text');
+        const textX = textElement ? parseFloat(textElement.getAttribute('x')) : 100;
+        const textY = textElement ? parseFloat(textElement.getAttribute('y')) : 100;
         
         input.style.left = (svgRect.left + textX) + 'px';
         input.style.top = (svgRect.top + textY) + 'px';
@@ -463,19 +520,10 @@ export class Canvas {
         // Get SVG bounding rect to position correctly
         const svgRect = this.svg.getBoundingClientRect();
         
-        // Notes textarea
-        const notesField = createElement('textarea', {
-            id: 'edgeNotes',
-            rows: '3'
-        });
-        notesField.value = edgeObj.notes || '';
-        
         // Assemble input dialog
         const input = createElement('div', { class: 'edge-input-container' }, [
             createElement('div', { class: 'edge-input-header' }, [`Edge ${point1.id}—${point2.id}`]),
-            createElement('label', {}, ['Notes:', notesField]),
             createElement('div', { class: 'edge-input-buttons' }, [
-                createElement('button', { id: 'saveEdge' }, ['Save']),
                 createElement('button', { id: 'deleteEdge', style: 'background-color: #dc3545;' }, ['Delete']),
                 createElement('button', { id: 'cancelEdge' }, ['Cancel'])
             ])
@@ -486,17 +534,6 @@ export class Canvas {
         input.style.top = (svgRect.top + midY) + 'px';
         
         document.body.appendChild(input);
-        
-        notesField.focus();
-        
-        document.getElementById('saveEdge').addEventListener('click', () => {
-            // Emit message to update edge
-            this.messagingHub.emit(Messages.EDGE_UPDATED, {
-                edgeObj: edgeObj,
-                notes: notesField.value
-            });
-            input.remove();
-        });
         
         document.getElementById('deleteEdge').addEventListener('click', () => {
             if (confirm(`Delete edge between ${point1.id} and ${point2.id}?`)) {

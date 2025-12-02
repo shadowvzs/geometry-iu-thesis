@@ -1,0 +1,535 @@
+/* Base styles and geometry problem creation */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    background: #f5f5f5;
+    overflow: hidden;
+}
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* Canvas */
+.canvas-container {
+    flex: 1;
+    background: white;
+    position: relative;
+    overflow: hidden;
+}
+
+#geometryCanvas {
+    display: block;
+    cursor: crosshair;
+}
+
+/* SVG Elements - Points */
+.point-group {
+    cursor: pointer;
+}
+
+.point-circle {
+    fill: #3498db;
+    stroke: #2980b9;
+    stroke-width: 2;
+    transition: all 0.2s;
+}
+
+.point-circle:hover {
+    fill: #5dade2;
+    stroke-width: 3;
+}
+
+.point-circle.selected {
+    fill: #ff0000;
+    stroke: #cc0000;
+    stroke-width: 3;
+}
+
+.point-circle.dragging {
+    fill: #e67e22;
+    stroke: #d35400;
+    stroke-width: 3;
+    cursor: grabbing !important;
+}
+
+.point-label {
+    fill: #2c3e50;
+    font-size: 14px;
+    font-weight: bold;
+    text-anchor: middle;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* SVG Elements - Circles */
+.circle-shape {
+    fill: none;
+    stroke: #95a5a6;
+    stroke-width: 2;
+    /* stroke-dasharray: 5,5; */
+}
+
+/* SVG Elements - Lines */
+.line {
+    stroke: #34495e;
+    stroke-width: 2;
+    pointer-events: stroke;
+    cursor: pointer;
+    transition: stroke-width 0.2s;
+}
+
+.line:hover {
+    stroke-width: 4;
+    stroke: #2c3e50;
+}
+
+.line.diameter {
+    stroke: #bdc3c7;
+    stroke-width: 1.5;
+    stroke-dasharray: 3,3;
+}
+
+.line.radius-line {
+    stroke: #3498db;
+    stroke-width: 1.5;
+    stroke-dasharray: 5,5;
+    pointer-events: none;
+}
+
+.line.bisector {
+    stroke: #e67e22;
+    stroke-width: 2;
+    stroke-dasharray: 5,5;
+}
+
+/* Guide line for constrained movement */
+.move-guide-line {
+    pointer-events: none;
+}
+
+/* SVG Elements - Angles */
+.angle-arc {
+    fill: rgba(52, 152, 219, 0.2);
+    stroke: #3498db;
+    stroke-width: 2;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.angle-arc:hover,
+.angle-group:hover .angle-arc {
+    fill: rgba(52, 152, 219, 0.8);
+    stroke-width: 3;
+}
+
+.angle-text {
+    fill: #2c3e50;
+    font-size: 14px;
+    font-weight: normal;
+    text-anchor: middle;
+    cursor: pointer;
+    user-select: none;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.angle-text:hover,
+.angle-group:hover .angle-text,
+.final-angle .angle-text {
+    fill: black;
+    opacity: 1;
+    font-weight: bold;
+}
+
+/* Angle Input Popup */
+.angle-input-container {
+    position: absolute;
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    z-index: 1000;
+    min-width: 260px;
+    max-width: 360px;
+    border: 2px solid #9b59b6;
+}
+
+.angle-input-header {
+    font-size: 14px;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #9b59b6;
+}
+
+.angle-input-container input {
+    margin-top: 4px;
+    padding: 6px 8px;
+    border: 2px solid #bdc3c7;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+    width: 100%;
+}
+
+.angle-input-container input:focus {
+    outline: none;
+    border-color: #9b59b6;
+}
+
+.greek-letters-container {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.greek-letter-btn {
+    padding: 6px 12px;
+    border: 2px solid #9b59b6;
+    border-radius: 4px;
+    background: white;
+    color: #9b59b6;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.greek-letter-btn:hover {
+    background: #9b59b6;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(155, 89, 182, 0.3);
+}
+
+.greek-letter-btn:active {
+    transform: translateY(0);
+}
+
+.angle-input-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+.angle-input-buttons button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+    background: #9b59b6;
+    color: white;
+}
+
+.angle-input-buttons button:hover {
+    background: #8e44ad;
+}
+
+/* Edge Input Popup */
+.edge-input-container {
+    position: fixed;
+    background: white;
+    border: 2px solid #3498db;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    min-width: 250px;
+    transform: translate(-50%, -50%);
+}
+
+.edge-input-header {
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.edge-input-container label {
+    display: block;
+    margin-bottom: 10px;
+    color: #2c3e50;
+    font-size: 13px;
+}
+
+.edge-input-container textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+    resize: vertical;
+}
+
+.edge-input-buttons {
+    display: flex;
+    gap: 5px;
+    margin-top: 10px;
+}
+
+.edge-input-container button {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    background: #3498db;
+    color: white;
+}
+
+.edge-input-container button:hover {
+    opacity: 0.9;
+}
+
+/* Point Menu Popup */
+.point-menu-container {
+    position: absolute;
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    z-index: 1000;
+    min-width: 280px;
+    border: 2px solid #3498db;
+}
+
+.point-menu-header {
+    font-size: 14px;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #3498db;
+}
+
+.point-menu-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.point-menu-inputs label {
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    color: #34495e;
+    font-weight: 500;
+}
+
+.point-menu-inputs input {
+    margin-top: 4px;
+    padding: 6px 8px;
+    border: 2px solid #bdc3c7;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+}
+
+.point-menu-inputs input:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.point-menu-directions {
+    margin-bottom: 12px;
+    padding-top: 8px;
+    border-top: 1px solid #ecf0f1;
+}
+
+.direction-label {
+    font-size: 11px;
+    color: #7f8c8d;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.direction-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    max-width: 150px;
+    margin: 0 auto;
+}
+
+.dir-btn {
+    padding: 6px;
+    border: 2px solid #bdc3c7;
+    border-radius: 4px;
+    background: #ecf0f1;
+    color: #2c3e50;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.dir-btn:hover {
+    background: #3498db;
+    color: white;
+    border-color: #3498db;
+    transform: scale(1.05);
+}
+
+.dir-btn:active {
+    transform: scale(0.95);
+}
+
+.dir-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: #95a5a6;
+    user-select: none;
+}
+
+.point-menu-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.point-menu-buttons button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.point-menu-buttons button:first-child {
+    background: #3498db;
+    color: white;
+}
+
+.point-menu-buttons button:first-child:hover {
+    background: #2980b9;
+}
+
+.point-menu-buttons button:last-child {
+    background: #95a5a6;
+    color: white;
+}
+
+.point-menu-buttons button:last-child:hover {
+    background: #7f8c8d;
+}
+
+/* Move button (middle button) */
+.point-menu-buttons button:nth-child(2) {
+    background: #e67e22;
+    color: white;
+}
+
+.point-menu-buttons button:nth-child(2):hover {
+    background: #d35400;
+}
+
+/* Load Dialog */
+.load-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.load-dialog-content {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 600px;
+}
+
+.load-dialog-content h3 {
+    margin: 0 0 15px 0;
+    color: #2c3e50;
+    font-size: 18px;
+}
+
+.load-dialog-content textarea {
+    width: 100%;
+    height: 300px;
+    padding: 10px;
+    border: 2px solid #3498db;
+    border-radius: 5px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    resize: vertical;
+    margin-bottom: 15px;
+}
+
+.load-dialog-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.load-dialog-buttons button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s;
+}
+
+.load-dialog-buttons button:first-child {
+    background: #3498db;
+    color: white;
+}
+
+.load-dialog-buttons button:first-child:hover {
+    background: #2980b9;
+}
+
+.load-dialog-buttons button:last-child {
+    background: #95a5a6;
+    color: white;
+}
+
+.load-dialog-buttons button:last-child:hover {
+    background: #7f8c8d;
+}
+
+/* Utility Classes */
+.hide {
+    display: none;
+}
+
+.block {
+    display: block;
+}

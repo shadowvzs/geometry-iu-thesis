@@ -1,7 +1,21 @@
+import {
+    
+    arePointsCollinear,
+    buildOverlappingAnglesMap,
+    isThisAngle,
+    findPointNeighbors,
+    getTriangles,
+    getAngleDisplayText,
+    getAngleNameFromPoints,
+    getAngleCalculatedInfo,
+} from '../utils/mathHelper.mjs';
+
 /**
  * Data Serialization and Deserialization utilities
  * Handles conversion between internal geometry data structures and JSON format
  */
+
+import { deepClone } from './objectHelper.mjs';
 
 /**
  * Serialize geometry data to JSON-compatible format
@@ -22,45 +36,63 @@ export function serializeGeometryData(geometryData) {
         circles = [],
         angles = [],
         lines = [],
-        triangles = [],
         definitions = []
     } = geometryData;
 
-    return {
-        points: points.map(point => ({
-            id: point.id,
-            x: point.x,
-            y: point.y,
-            notes: point.notes || ''
-        })),
-        edges: edges.map(edge => ({
-            points: edge.points || [],
-            notes: edge.notes || ''
-        })),
-        circles: circles.map(circle => ({
-            name: circle.id || circle.name,
-            centerPoint: circle.centerPoint,
-            centerX: circle.centerX,
-            centerY: circle.centerY,
-            radius: circle.radius,
-            pointsOnLine: circle.pointsOnLine || []
-        })),
-        angles: angles.map(angle => ({
-            pointId: angle.point,
-            sidepoints: angle.neighborPoints || [],
-            value: angle.value,
-            calculatedValue: angle.calculatedValue,
-            label: angle.label || '',
-            notes: angle.notes || ''
-        })),
-        lines: lines,
-        triangles: triangles.map(triangle => Array.from(triangle).sort()),
-        definitions: definitions.map(def => ({
+    const result = {
+        points: points.map(point => {
+            const serialized = {
+                id: point.id,
+                x: Math.round(point.x),
+                y: Math.round(point.y)
+            };
+            if (point.hide) serialized.h = true;
+            return serialized;
+        }),
+        edges: edges.map(edge => {
+            const serialized = {
+                p: edge.points || []
+            };
+            if (edge.hide) serialized.h = true;
+            return serialized;
+        }),
+        circles: circles.map(circle => {
+            const serialized = {
+                id: circle.centerPoint,
+                x: Math.round(circle.centerX),
+                y: Math.round(circle.centerY),
+                r: Math.round(circle.radius)
+            };
+            if (circle.pointsOnLine && circle.pointsOnLine.length > 0) {
+                serialized.p = circle.pointsOnLine;
+            }
+            if (circle.hide) serialized.h = true;
+            return serialized;
+        }),
+        angles: angles.map(angle => {
+            const serialized = {
+                id: angle.pointId,
+                p: angle.sidepoints || []
+            };
+            if (angle.value != null) serialized.v = angle.value;
+            if (angle.label) serialized.l = angle.label;
+            if (angle.hide) serialized.h = true;
+            return serialized;
+        }),
+        lines: lines
+        // triangles removed - they are rebuilt from edges/lines by updateTriangles()
+    };
+    
+    // Only include definitions if not empty
+    if (definitions && definitions.length > 0) {
+        result.definitions = definitions.map(def => ({
             id: def.id,
             text: def.text,
             timestamp: def.timestamp
-        }))
-    };
+        }));
+    }
+    
+    return result;
 }
 
 /**
@@ -82,111 +114,71 @@ export function deserializeGeometryData(jsonData) {
 
     // Normalize points
     if (jsonData.points && Array.isArray(jsonData.points)) {
-        normalized.points = jsonData.points.map(pointData => ({
-            id: pointData.id || pointData.name, // Support both id and name
-            x: pointData.x,
-            y: pointData.y,
-            notes: pointData.notes || ''
-        }));
+        normalized.points = jsonData.points.map(pointData => {
+            const point = {
+                id: pointData.id || pointData.name, // Support both id and name
+                x: Math.round(pointData.x),
+                y: Math.round(pointData.y),
+                hide: !!pointData.h
+            };
+            return point;
+        });
     }
 
     // Normalize edges
     if (jsonData.edges && Array.isArray(jsonData.edges)) {
         normalized.edges = jsonData.edges.map(edgeData => {
-            // Support multiple formats: points array, point1/point2, or direct array
-            let points;
-            if (edgeData.points && Array.isArray(edgeData.points)) {
-                points = edgeData.points;
-            } else if (edgeData.point1 && edgeData.point2) {
-                points = [edgeData.point1, edgeData.point2];
-            } else if (Array.isArray(edgeData) && edgeData.length === 2) {
-                points = edgeData;
-            } else {
-                points = [];
-            }
-
-            return {
-                points,
-                notes: edgeData.notes || ''
+            const edge = {
+                points: edgeData.p,
+                hide: !!edgeData.h
             };
+            return edge;
         });
     }
 
     // Normalize circles
     if (jsonData.circles && Array.isArray(jsonData.circles)) {
         normalized.circles = jsonData.circles.map(circleData => {
-            // Support multiple formats for backward compatibility
-            let centerPoint, pointsOnLine = [];
-
-            if (circleData.centerPoint !== undefined) {
-                // New format
-                centerPoint = circleData.centerPoint;
-                pointsOnLine = circleData.pointsOnLine || [];
-            } else if (circleData.centerPointId) {
-                // Old format with centerPointId/radiusPointId
-                centerPoint = circleData.centerPointId;
-                pointsOnLine = circleData.radiusPointId ? [circleData.radiusPointId] : [];
-            } else if (circleData.point1) {
-                // Very old format with point1/point2
-                centerPoint = circleData.point1;
-                pointsOnLine = circleData.point2 ? [circleData.point2] : [];
-            }
-
-            // Also include old 'points' array if it exists
-            if (circleData.points && Array.isArray(circleData.points)) {
-                pointsOnLine = [...new Set([...pointsOnLine, ...circleData.points])];
-            }
-
-            return {
-                id: circleData.id || circleData.name,
-                centerPoint,
-                centerX: circleData.centerX,
-                centerY: circleData.centerY,
-                radius: circleData.radius,
-                pointsOnLine
+            const circle = {
+                id: circleData.id,
+                centerPoint: circleData.id,
+                centerX: Math.round(circleData.x),
+                centerY: Math.round(circleData.y),
+                radius: Math.round(circleData.r),
+                pointsOnLine: circleData.p || [],
+                hide: !!circleData.h
             };
+            return circle;
         });
     }
 
     // Normalize angles
     if (jsonData.angles && Array.isArray(jsonData.angles)) {
         normalized.angles = jsonData.angles.map(angleData => {
-            // Support both old format (vertexId, point1Id, point2Id) and new format (pointId, sidepoints)
-            let pointId, sidepoints;
+            // Support multiple formats: new short (id, p, v, l) and old formats
+            const angle = {
+                id: Math.random().toString(36),
+                pointId: angleData.id,
+                sidepoints: angleData.p,
+                value: angleData.v || null,
+                label: angleData.l || '',
+                hide: !!angleData.h,
+                name: getAngleNameFromPoints(angleData.id, angleData.p[0], angleData.p[1]),
+                // ui related and will be populated later
+                radius: null,
+                calculatedValue: null,
+                startAngle: null,
+                endAngle: null,
+                groupElement: null
 
-            if (angleData.pointId) {
-                pointId = angleData.pointId;
-            } else if (angleData.vertexId) {
-                pointId = angleData.vertexId;
-            }
-
-            // Support multiple sidepoint formats
-            if (angleData.sidepoints && angleData.sidepoints.length === 2) {
-                sidepoints = angleData.sidepoints;
-            } else if (angleData.sidePoints && angleData.sidePoints.length === 2) {
-                sidepoints = angleData.sidePoints;
-            } else if (angleData.point1Id && angleData.point2Id) {
-                sidepoints = [angleData.point1Id, angleData.point2Id];
-            } else {
-                sidepoints = [];
-            }
-
-            return {
-                pointId,
-                sidepoints,
-                value: angleData.value,
-                calculatedValue: angleData.calculatedValue,
-                label: angleData.label !== undefined ? angleData.label : '',
-                notes: angleData.notes || '',
-                id: angleData.id,
-                radius: angleData.radius
             };
+            return angle;
         });
     }
 
     // Normalize lines
     if (jsonData.lines && Array.isArray(jsonData.lines)) {
-        normalized.lines = JSON.parse(JSON.stringify(jsonData.lines)); // Deep copy
+        normalized.lines = deepClone(jsonData.lines); // Deep copy
     }
 
     // Normalize triangles
@@ -212,75 +204,6 @@ export function deserializeGeometryData(jsonData) {
     }
 
     return normalized;
-}
-
-/**
- * Build internal geometry data structures from normalized JSON
- * Creates adjacency maps, points map, and properly formatted angles for AngleSolver
- * @param {Object} jsonData - Normalized JSON data from deserializeGeometryData
- * @returns {Object} Complete internal data structure ready for AngleSolver
- */
-export function buildInternalGeometryData(jsonData) {
-    // Build adjacency map
-    const adjacentPoints = new Map();
-    jsonData.points.forEach(point => {
-        adjacentPoints.set(point.id, new Set());
-    });
-    
-    jsonData.edges.forEach(edge => {
-        const [p1, p2] = edge.points;
-        adjacentPoints.get(p1).add(p2);
-        adjacentPoints.get(p2).add(p1);
-    });
-    
-    // Build points map
-    const pointsMap = new Map();
-    jsonData.points.forEach(point => {
-        pointsMap.set(point.id, point);
-    });
-    
-    // Process angles - convert from JSON format to internal format
-    const angles = jsonData.angles.map((angleData, index) => {
-        const vertexId = angleData.pointId || angleData.vertexId;
-        const neighborPoints = angleData.sidepoints || angleData.sidePoints || [angleData.point1Id, angleData.point2Id];
-        
-        return {
-            id: angleData.id || `angle-${index}`,
-            point: vertexId,
-            pointId: vertexId,
-            neighborPoints: neighborPoints,
-            sidepoints: neighborPoints,
-            value: angleData.value,
-            label: angleData.label || '',
-            name: `∠${vertexId}(${neighborPoints.join(',')})`,
-            notes: angleData.notes || '',
-            radius: angleData.radius
-        };
-    });
-    
-    // Process triangles
-    const triangles = (jsonData.triangles || []).map(t => new Set(t));
-    
-    // Process circles
-    const circles = (jsonData.circles || []).map(circleData => ({
-        name: circleData.name || circleData.id,
-        centerPoint: circleData.centerPoint,
-        centerX: circleData.centerX,
-        centerY: circleData.centerY,
-        radius: circleData.radius,
-        pointsOnLine: circleData.pointsOnLine || []
-    }));
-    
-    return {
-        adjacentPoints,
-        circles,
-        edges: jsonData.edges || [],
-        points: jsonData.points || [],
-        lines: jsonData.lines || [],
-        pointsMap,
-        angles,
-        triangles
-    };
 }
 
 /**
@@ -355,3 +278,183 @@ export function validateGeometryData(data) {
     };
 }
 
+export const enrichGeometryData = (data) => {
+    // Clear current state
+    const adjacentPoints = new Map(); // helper where the key is point id and the value is a Set of adjacent point ids
+    const angles = [];
+    const anglesToCreate = [];
+    const circles = [];
+    const definitions = data.definitions || [];
+    const edges = [];
+    const lines = [...data.lines];
+    const points = [];
+    const pointsMap = new Map(); // helper where the key is the point id and the value is the point object
+    const overlappingAngles = new Map();
+    const triangles = [];
+        
+    // normalize points
+    if (data.points) {
+        data.points.forEach(pointData => {
+            const point = {
+                id: pointData.id,
+                x: Math.round(pointData.x),
+                y: Math.round(pointData.y)
+            };
+            if (pointData.hide) point.hide = true;
+            points.push(point);
+            pointsMap.set(point.id, point);
+        });
+    }
+
+    const addAdjacentPoint = (pointId, adjacentPointId) => {
+        if (!adjacentPoints.has(pointId)) {
+            adjacentPoints.set(pointId, new Set());
+        }
+        adjacentPoints.get(pointId).add(adjacentPointId);
+    };
+
+    // Restore edges
+    if (data.edges) {
+        data.edges.forEach(edgeData => {
+            const pointIds = edgeData.points;
+            const point1 = pointsMap.get(pointIds[0]);
+            const point2 = pointsMap.get(pointIds[1]);
+            
+            if (point1 && point2) {
+                const edge = {
+                    points: [pointIds[0], pointIds[1]],
+                    element: null // to be set after drawing
+                };
+
+                edges.push(edge);
+                
+                // Rebuild adjacentPoints map
+                addAdjacentPoint(pointIds[0], pointIds[1]);
+                addAdjacentPoint(pointIds[1], pointIds[0]);
+            }
+        });
+    }
+    
+    // Restore circles
+    if (data.circles) {
+        data.circles.forEach(circleData => {
+            const centerPointId = circleData.centerPoint;
+            const pointsOnLine = circleData.pointsOnLine || [];
+            const centerPoint = pointsMap.get(centerPointId);
+            
+            // Validate that all points on line exist
+            const validPointsOnLine = pointsOnLine.filter(id => pointsMap.get(id));
+            
+            if (centerPoint) {
+                // Draw circle
+                const circleObj = {
+                    name: circleData.id || `Circle_${centerPoint.id}`,
+                    centerPoint: centerPointId,
+                    centerX: Math.round(circleData.centerX),
+                    centerY: Math.round(circleData.centerY),
+                    radius: Math.round(circleData.radius),
+                    pointsOnLine: validPointsOnLine,
+                    hide: circleData.hide
+                };
+                circles.push(circleObj);
+            }
+        });
+    }
+            
+    // Rebuild triangles BEFORE angles (needed for isAngleInTriangle check)
+    triangles.push(...getTriangles(angles, adjacentPoints, lines, pointsMap));
+    
+    // Restore angles - manually recreate only the angles that existed in the saved data
+    if (data.angles) {
+        data.angles.forEach(angleData => {
+            const vertexId = angleData.pointId;
+            const vertex = pointsMap.get(vertexId);
+            const point1 = pointsMap.get(angleData.sidepoints[0]);
+            const point2 = pointsMap.get(angleData.sidepoints[1]);
+            
+            if (!vertex || !point1 || !point2) { return; }
+            const angle = data.angles.find(a => 
+                isThisAngle(a, vertexId, point1.id, point2.id)
+            );
+            if (!angle) { return; }
+
+            const {
+                angle1,
+                angle2,
+                angleDegrees,
+                radius
+            } = getAngleCalculatedInfo(vertex, point1, point2);
+            
+            angle.radius = radius;
+            angle.startAngle = angle1;
+            angle.endAngle = angle2;
+            angle.calculatedValue = angleDegrees;
+            angles.push(angle);
+        });
+    }
+
+    // Rebuild overlappingAngles map
+    // Filter out hidden angles before processing
+    const visibleAngles = angles.filter(angle => !angle.hide);
+    buildOverlappingAnglesMap(visibleAngles, lines, overlappingAngles);
+
+    // Restore definitions
+    if (data.definitions) {
+        data.definitions.forEach(defData => definitions.push({
+            id: defData.id,
+            text: defData.text,
+            timestamp: defData.timestamp
+        }));
+    }
+    
+    const result = {
+        adjacentPoints,
+        angles,
+        anglesToCreate,
+        circles,
+        definitions,
+        edges,
+        lines,
+        points,
+        pointsMap,
+        overlappingAngles,
+        triangles
+    };
+
+    return result;
+}
+
+export const serializeStateForUrl = ({
+    points,
+    edges,
+    circles,
+    angles,
+    lines,
+    triangles,
+    definitions
+}) => {
+    if (angles === 0) {
+        alert('No angles to solve!');
+        return;
+    }
+    const data = serializeGeometryData({ points, edges, circles, angles, lines, triangles, definitions });
+    data.angles
+        .filter(angle => angle.l)
+        .forEach(angle =>angle.l = encodeURIComponent(angle.l));
+    const encodedData = window.btoa(JSON.stringify(data));
+    return encodedData;
+}
+
+export const deserializeStateFromUrl = (encodedText) => {
+    try {
+        const json = window.atob(encodedText);
+        const data = JSON.parse(json);
+        data.angles
+            .filter(angle => angle.l)
+            .forEach(angle =>angle.l = decodeURIComponent(angle.l));
+        return data;
+    } catch (error) {
+        console.error('Error loading initial problem:', error);
+        return null;
+    }
+}

@@ -1,0 +1,77 @@
+/* Toolbar styles */
+
+.toolbar {
+    background: #2c3e50;
+    color: white;
+    padding: 8px 15px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.toolbar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.toolbar-header .toolbar-feedback {
+    border: 1px solid #aaa;
+    width: 30px;
+    border-radius: 4px;
+    height: 30px;
+    text-align: center;
+}
+
+.toolbar h1 {
+    font-size: 18px;
+    margin-bottom: 6px;
+}
+
+.tool-buttons {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.tool-btn {
+    padding: 8px;
+    border: none;
+    border-radius: 4px;
+    background: #34495e;
+    color: white;
+    cursor: pointer;
+    font-size: 20px;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    line-height: 1;
+}
+
+.tool-btn:hover {
+    background: #4a6278;
+    transform: translateY(-2px);
+}
+
+.tool-btn.active {
+    background: #3498db;
+}
+
+#toggleNamesBtn.active {
+    background: #27ae60;
+}
+
+.tool-btn.danger {
+    background: #e74c3c;
+}
+
+.tool-btn.danger:hover {
+    background: #c0392b;
+}
+
+.info {
+    font-size: 12px;
+    color: #ecf0f1;
+}

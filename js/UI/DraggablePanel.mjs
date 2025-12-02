@@ -84,13 +84,6 @@ export function initDraggablePanels() {
         new DraggablePanel(definitionsPanel, definitionsHeader);
     }
 
-    // Notes Panel
-    const notesPanel = document.getElementById('notesPanel');
-    const notesHeader = notesPanel?.querySelector('.notes-header');
-    if (notesPanel && notesHeader) {
-        new DraggablePanel(notesPanel, notesHeader);
-    }
-
     // Debug Panel
     const debugPanel = document.getElementById('debugPanel');
     const debugHeader = debugPanel?.querySelector('.debug-header');

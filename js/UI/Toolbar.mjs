@@ -27,12 +27,6 @@ const getDefaultButtonConfigs = () => ({
         action: 'setTool',
         params: ['drawEdge']
     },
-    extendEdge: {
-        icon: '➡️',
-        title: 'Extend Edge (Select 2 connected points)',
-        action: 'setTool',
-        params: ['extendEdge']
-    },
     assignAngle: {
         icon: '∠',
         title: 'Assign Angle Value (Click on angle)',
@@ -55,6 +49,12 @@ const getDefaultButtonConfigs = () => ({
         icon: '🔍',
         title: 'Solve Unknown Angles (Use geometric theorems)',
         action: 'solveAngles',
+        params: []
+    },
+    hideElement: {
+        icon: '⛏',
+        title: 'Hide element (Click on element)',
+        action: 'hideElement',
         params: []
     },
     save: {
@@ -87,6 +87,13 @@ const getDefaultButtonConfigs = () => ({
         class: 'danger',
         action: 'clear',
         params: []
+    },
+    toSolvedMode: {
+        icon: '⚓',
+        title: 'Solve in new tab',
+        class: 'to-solver-mode',
+        action: 'solveInNewTab',
+        params: []
     }
 });
 
@@ -104,12 +111,16 @@ export class Toolbar {
 
     initialize() {
         this.container = createElement('div', { class: 'toolbar' }, [
-            ['h1', {}, ['Geometry Tool']],
+            ['header', { class: 'toolbar-header' }, [
+                ['h1', {}, ['Geometry Tool']],
+                ['div', { class: 'toolbar-feedback hide' }, []]
+            ]],
             ['div', { class: 'tool-buttons' }],
             ['div', { class: 'info' }, [
                 ['p', { id: 'statusText' }, ['Click on canvas to Add Points']]
             ]]
         ]);
+        this.feedback = this.container.querySelector('.toolbar-feedback');
         this.buttons = this.container.querySelector('.tool-buttons');
         this.statusText = this.container.querySelector('#statusText');
 
@@ -117,9 +128,17 @@ export class Toolbar {
         return this.container;
     }
 
+    registerFeedback = () => {
+        this.feedback.classList.remove('hide');
+    }
+
     // Register toolbar buttons
     registerButton = (id, onclick) => {
         const config = this.defaultButtons[id];
+        if (!config) {
+            console.warn(`No default configuration found for button ID: ${id}`);
+            return;
+        }
         const classes = config.class ? `tool-btn ${config.class}` : 'tool-btn';
         const button = createElement('button', { id: `${id}Btn`, class: classes, title: config.title }, [config.icon]);
         button.addEventListener('click', onclick);
@@ -128,7 +147,7 @@ export class Toolbar {
         this.buttonMap.set(id, { onclick, element: button });
     }
 
-    unregisterButton(id) {
+    unregisterButton = (id) => {
         const button = this.buttonMap.get(id);
         if (button) {
             this.buttonMap.delete(id);
@@ -137,13 +156,17 @@ export class Toolbar {
         }
     }
     
-    updateStatus(message) {
+    updateStatus = (message) => {
         if (this.statusText) {
             this.statusText.textContent = message;
         }
     }
     
-    getButton(id) {
+    getButton = (id) => {
         return this.buttonMap.get(id)?.element;
+    }
+
+    updateFeedback = (canBeSolved) => {
+        this.feedback.textContent = canBeSolved ? '✔' : '✖';
     }
 }

@@ -1,45 +1,59 @@
 // Geometry Drawing Tool
 // Messaging
 import { MessagingHub, Messages } from './MessagingHub.mjs';
+import { DefinitionsPanel } from './UI/panels/DefinitionsPanel.mjs';
+import { JsonPanel } from './UI/panels/JsonPanel.mjs';
+import { DebugPanel } from './UI/panels/DebugPanel.mjs';
+
+import { solve } from './utils/solve.mjs';
 
 // Managers
 import { HistoryManager } from './HistoryManager.mjs';
-import { AngleSolver } from './AngleSolver.mjs';
 
 // Utils
 import { 
-    getNewPointName, 
-    angleToPoint, 
-    normalizeAngle, 
-    radiansToDegrees, 
-    degreesToRadians, 
-    distance, 
-    calculateAngleDegrees, 
-    lineIntersection, 
-    clipLineToCanvas,
-    pointToSegmentDistance, 
     arePointsCollinear, 
-    findOverlappingAngles, 
-    dotProduct2D, 
-    crossProduct2D, 
-    triangleArea, 
-    isPointInTriangle, 
-    isPointOnCircle, 
     arePointsCollinearByPosition, 
-    buildOverlappingAnglesMap,
+    isAngleInTriangleByEdges,
+    calculateAngleDegrees,
+    clipLineToCanvas,
+    distance,
+    findPointNeighbors,
+    findNearbyEdges,
+    getAngleValue,
+    getAngleCalculatedInfo,
+    getAngleDisplayText,
+    getAngleNameFromPoints,
+    getNewPointName,
+    getSameAngleNames,
+    getUnusedGreekLetter,
+    getTriangles,
+    increaseAngleRadius,
     isPointInsideAngle,
-    getUnusedGreekLetter
+    isPointInTriangle, 
+    isPointOnCircle,
+    isThisAngle,
+    lineIntersection, 
+    normalizeAngle,
 } from './utils/mathHelper.mjs';
-import { createElement, escapeHtml } from './utils/domHelper.mjs';
-import { serializeGeometryData, deserializeGeometryData, validateGeometryData } from './utils/dataSerializer.mjs';
+import {
+    createElement,
+} from './utils/domHelper.mjs';
+import {
+    deserializeGeometryData,
+    enrichGeometryData,
+    serializeGeometryData,
+    serializeStateForUrl,
+    validateGeometryData,
+} from './utils/dataSerializer.mjs';
+import { deepClone } from './utils/objectHelper.mjs';
 
 // UI
 import { UI } from './UI/index.mjs';
 import { initDraggablePanels } from './UI/DraggablePanel.mjs';
 import { debugLogger } from './DebugLogger.mjs';
 
-
-class GeometryTool {
+export class Creator {
     constructor() {
         // Initialize messaging hub first
         this.messagingHub = new MessagingHub();
@@ -52,6 +66,7 @@ class GeometryTool {
         this.edges = [];
         this.angles = [];
         this.lines = []; // Track collinear points (points on same edge)
+        this.linesWeakMap = new WeakMap(); // Map edge objects to their line arrays
         this.definitions = [];
         this.selectedPoints = [];
         this.currentTool = 'addPoint';
@@ -68,7 +83,6 @@ class GeometryTool {
         
         // Initialize managers
         this.historyManager = new HistoryManager(this);
-        this.angleSolver = new AngleSolver(this.messagingHub);
         
         // Subscribe to messages
         this.setupMessageSubscriptions();
@@ -95,11 +109,12 @@ class GeometryTool {
 
         // Point events
         this.messagingHub.subscribe(Messages.POINT_CREATE_REQUESTED, (data) => this.handlePointCreateRequest(data));
-        this.messagingHub.subscribe(Messages.POINT_NOTES_UPDATED, (point) => {
-            this.updateStatus(`✓ Notes saved for point ${point.id}`);
-            this.historyManager.saveState();
-            this.updateNotesPanel();
-        });
+        
+        // Point dragging - update connected edges and angles in real-time
+        this.messagingHub.subscribe(Messages.POINT_DRAGGING, this.handlePointDragging);
+        
+        // Point moved - check if point is on edge or circle (after drag completes)
+        this.messagingHub.subscribe(Messages.POINT_MOVED, this.handlePointMoved);
 
         // Definition events
         this.messagingHub.subscribe(Messages.DEFINITION_ADDED, (text) => this.addDefinition(text));
@@ -110,7 +125,7 @@ class GeometryTool {
         this.messagingHub.subscribe(Messages.ANGLE_UPDATED, (data) => this.updateAngle(data));
         this.messagingHub.subscribe(Messages.ANGLE_BISECTOR_REQUESTED, (angleData) => this.createAngleBisector(angleData));
         this.messagingHub.subscribe(Messages.ANGLE_DELETE_REQUESTED, (angleData) => this.deleteAngle(angleData));
-        
+
         // Edge events
         this.messagingHub.subscribe(Messages.EDGE_UPDATED, (data) => this.updateEdge(data));
         this.messagingHub.subscribe(Messages.EDGE_DELETE_REQUESTED, (edgeObj) => this.deleteEdge(edgeObj));
@@ -125,40 +140,126 @@ class GeometryTool {
         this.messagingHub.subscribe(Messages.STATUS_UPDATED, (message) => this.updateStatus(message));
         
         // Angle solver events
-        this.messagingHub.subscribe(Messages.ANGLE_SOLVE_COMPLETED, (data) => {
-            const timeStr = data.executionTimeMs ? ` in ${data.executionTimeMs.toFixed(2)}ms` : '';
-            this.updateStatus(`✓ Angle solving complete (${data.iterations} iterations, ${data.changesMade} angles calculated${timeStr})`);
-            this.updateNotesPanel();
-            this.updateJsonPanel();
-            this.saveState();
-        });
+        this.messagingHub.subscribe(Messages.ANGLE_SOLVE_COMPLETED, this.handleAngleSolveCompleted);
         
-        this.messagingHub.subscribe(Messages.ANGLE_VALUE_CALCULATED, (data) => {
-            const angle = this.angles.find(a => a.id === data.angleId);
-            if (angle && angle.textElement) {
-                angle.textElement.textContent = this.getAngleDisplayText(angle);
-                // Redraw the arc in case the value is 90 (should show square corner)
-                this.redrawAngleArc(angle);
+        this.messagingHub.subscribe(Messages.ANGLE_VALUE_CALCULATED, this.handleAngleValueCalculated);
+    }
+
+    handleAngleValueCalculated = (angle) => {
+        if (angle && angle.groupElement) {
+            const textElement = angle.groupElement.querySelector('text');
+            if (textElement) {
+                textElement.textContent = getAngleDisplayText(angle);
+            }
+            // Redraw the arc in case the value is 90 (should show square corner)
+            this.redrawAngleArc(angle);
+        }
+    };
+
+    handleAngleSolveCompleted = (data) => {
+        const timeStr = data.executionTimeMs ? ` in ${data.executionTimeMs.toFixed(2)}ms` : '';
+        this.updateStatus(`✓ Angle solving complete (${data.iterations} iterations, ${data.changesMade} angles calculated${timeStr})`);
+        this.saveState();
+    };
+
+    handlePointDragging = (data) => {
+        const { point } = data;
+        
+        // Update all edges connected to this point
+        this.edges.forEach(edge => {
+            if (edge.points.includes(point.id)) {
+                const p1 = this.pointsMap.get(edge.points[0]);
+                const p2 = this.pointsMap.get(edge.points[1]);
+                if (p1 && p2 && edge.element) {
+                    edge.element.setAttribute('x1', p1.x);
+                    edge.element.setAttribute('y1', p1.y);
+                    edge.element.setAttribute('x2', p2.x);
+                    edge.element.setAttribute('y2', p2.y);
+                }
             }
         });
-    }
+        
+        // Update angles display for affected angles
+        this.angles.forEach(angle => {
+            if (angle.sidepoints.includes(point.id)) {
+                // Recalculate angle value
+                const vertex = this.pointsMap.get(angle.pointId);
+                const p1 = this.pointsMap.get(angle.sidepoints[0]);
+                const p2 = this.pointsMap.get(angle.sidepoints[1]);
+                if (vertex && p1 && p2) {
+                    angle.calculatedValue = calculateAngleDegrees(vertex, p1, p2);
+                }
+                // Update visual
+                if (angle.groupElement) {
+                    this.redrawAngleArc(angle);
+                    const textElement = angle.groupElement.querySelector('text');
+                    if (textElement) {
+                        textElement.textContent = getAngleDisplayText(angle);
+                    }
+                }
+            }
+        });
+    };
+
+    handlePointMoved = (data) => {
+        const { point } = data;
+        const threshold = 5;
+        
+        // Check if the moved point is now on any circle's border
+        this.circles.forEach(circle => {
+            // Skip if the point is the center
+            if (circle.centerPoint === point.id) return;
+            
+            const centerPoint = this.pointsMap.get(circle.centerPoint);
+            if (!centerPoint) return;
+            
+            const distanceFromCenter = Math.sqrt(
+                Math.pow(point.x - centerPoint.x, 2) + 
+                Math.pow(point.y - centerPoint.y, 2)
+            );
+            
+            const distanceFromBorder = Math.abs(distanceFromCenter - circle.radius);
+            const wasOnCircle = circle.pointsOnLine && circle.pointsOnLine.includes(point.id);
+            const isOnCircle = distanceFromBorder <= threshold;
+            
+            if (isOnCircle && !wasOnCircle) {
+                // Point moved onto circle
+                if (!circle.pointsOnLine) circle.pointsOnLine = [];
+                circle.pointsOnLine.push(point.id);
+            } else if (!isOnCircle && wasOnCircle) {
+                // Point moved off circle
+                circle.pointsOnLine = circle.pointsOnLine.filter(id => id !== point.id);
+            }
+        });
+        
+        // Check if the moved point is now on any edge (for collinearity)
+        // Update existing lines that contain this point
+        this.lines.forEach(line => {
+            if (line.includes(point.id)) {
+                // Verify the point is still collinear with its neighbors in the line
+                const pointIndex = line.indexOf(point.id);
+                const prevPoint = pointIndex > 0 ? this.pointsMap.get(line[pointIndex - 1]) : null;
+                const nextPoint = pointIndex < line.length - 1 ? this.pointsMap.get(line[pointIndex + 1]) : null;
+                
+                if (prevPoint && nextPoint) {
+                    arePointsCollinearByPosition(prevPoint, point, nextPoint, threshold);
+                }
+            }
+        });
+        
+        // Save state after move
+        this.saveState();
+    };
 
     addPoint = (point) => {
         this.points.push(point);
         this.pointsMap.set(point.id, point);
-        this.checkSolvability();
     }
-    
-    getAngleDisplayText = (angle) => {
-        // Priority: value > label > '?'
-        if (angle.value && angle.value !== '?') {
-            const isGreekLetter = isNaN(parseFloat(angle.value));
-            return isGreekLetter ? angle.value : angle.value + '°';
-        }
-        if (angle.label && angle.label.trim() !== '') {
-            return angle.label;
-        }
-        return '?';
+
+    addLine = (linePoints) => {
+        this.lines.push(linePoints);
+        const id = Math.random().toString(36);
+        this.linesWeakMap.set(linePoints, id);
     }
     
     initialize = () => {
@@ -167,22 +268,30 @@ class GeometryTool {
         this.svg = this.ui.canvas.svg;
 
         // Initialize toolbar buttons - use messaging hub
-        const { registerButton } = this.ui.toolbar;
+        const { registerButton, registerFeedback } = this.ui.toolbar;
+        registerFeedback();
         registerButton('pointer', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'pointer'));
         registerButton('drawPoint', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'addPoint'));
         registerButton('drawCircle', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'drawCircle'));
         registerButton('drawEdge', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'drawEdge'));
-        registerButton('extendEdge', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'extendEdge'));
         registerButton('assignAngle', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'assignAngle'));
         registerButton('angleBisector', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'angleBisector'));
         registerButton('toggleNames', () => this.messagingHub.emit(Messages.TOGGLE_NAMES));
         registerButton('solveAngles', () => this.solveAngles());
+        registerButton('hideElement', () => this.hideElement());
         registerButton('save', () => this.messagingHub.emit(Messages.SAVE_REQUESTED));
         registerButton('load', () => this.messagingHub.emit(Messages.LOAD_REQUESTED));
         registerButton('undo', () => this.messagingHub.emit(Messages.UNDO_REQUESTED));
         registerButton('redo', () => this.messagingHub.emit(Messages.REDO_REQUESTED));
         registerButton('clear', () => this.messagingHub.emit(Messages.CLEAR_REQUESTED));
-                
+        registerButton('toSolvedMode', () => this.solveInNewTab());
+
+        // Update panels
+        const { registerPanel } = this.ui.panels;
+        registerPanel('definitions', DefinitionsPanel);
+        registerPanel('json', JsonPanel);
+        registerPanel('debug', DebugPanel);
+    
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey || e.metaKey) {
@@ -195,6 +304,32 @@ class GeometryTool {
                 }
             }
         });
+        
+ 
+        // Canvas click - emit message instead of direct call
+        this.ui.canvas.svg.addEventListener('click', (e) => {
+            this.messagingHub.emit(Messages.CANVAS_CLICKED, { event: e });
+        });
+        
+        // Initialize debug logger
+        debugLogger.init();
+        
+        this.updateStatus('Click on canvas to add points');
+        
+        // Save initial empty state
+        this.saveState();
+        
+        // Update panels
+        this.addDefinitionPanel();
+
+        // Initialize draggable panels
+        initDraggablePanels();
+    }
+    
+    addDefinitionPanel = () => {
+        // this.panelMap['definitions'] = DefinitionsPanel;
+        // this.panelMap['json'] = JsonPanel;
+        // this.panelMap['debug'] = DebugPanel;
         
         // Add definition button - use messaging hub
         document.getElementById('addDefinitionBtn').addEventListener('click', () => {
@@ -263,33 +398,40 @@ class GeometryTool {
                 item.classList.remove('editing');
             }
         });
-        
-        // Canvas click - emit message instead of direct call
-        this.ui.canvas.svg.addEventListener('click', (e) => {
-            this.messagingHub.emit(Messages.CANVAS_CLICKED, { event: e });
-        });
-        
-        // Initialize debug logger
-        debugLogger.init();
-        
-        this.updateStatus('Click on canvas to add points');
-        
-        // Save initial empty state
-        this.saveState();
-        
-        // Update panels
+
         this.updateDefinitionsPanel();
-        this.updateNotesPanel();
-        this.updateJsonPanel();
-        
-        // Initialize draggable panels
-        initDraggablePanels();
     }
-    
+
+    updateDefinitionsPanel = () => {
+        this.ui.panels.getPanel('definitions').updateDefinitions(this.definitions);
+    }
+
+    solveInNewTab = () => {
+        const targetAngle = this.angles.find(angle => angle.value === "?" && angle.label);
+        if (!targetAngle) {
+            alert('No target angle found with value "?" and a label.');
+            return;
+        }
+        const encodedData = serializeStateForUrl({
+            points: this.points,
+            edges: this.edges,
+            circles: this.circles,
+            angles: this.angles,
+            definitions: this.definitions,
+            lines: this.lines,
+            triangles: this.triangles
+        });
+        const url = `${window.location.origin}${window.location.pathname}?mode=solver&problem=${encodedData}`;
+        window.open(url, '_blank');
+    }
+
     setTool = (tool) => {
-        debugLogger.log('GeometryTool.setTool', { tool });
+        debugLogger.log('Creator.setTool', { tool });
         this.currentTool = tool;
         this.selectedPoints = [];
+        
+        // Update point selection visuals (removes selected class from all points)
+        this.updatePointSelection();
         
         // Update button states
         document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
@@ -297,7 +439,7 @@ class GeometryTool {
         if (tool === 'pointer') {
             document.getElementById('pointerBtn').classList.add('active');
             this.updateStatus('Click on points, edges, or angles to edit them');
-        } else if (tool === 'drawPointBtn') {
+        } else if (tool === 'addPoint') {
             document.getElementById('drawPointBtn').classList.add('active');
             this.updateStatus('Click on canvas to add points');
         } else if (tool === 'drawCircle') {
@@ -306,9 +448,6 @@ class GeometryTool {
         } else if (tool === 'drawEdge') {
             document.getElementById('drawEdgeBtn').classList.add('active');
             this.updateStatus('Select 2 points to draw an edge');
-        } else if (tool === 'extendEdge') {
-            document.getElementById('extendEdgeBtn').classList.add('active');
-            this.updateStatus('Select 2 connected points to extend the edge');
         } else if (tool === 'assignAngle') {
             document.getElementById('assignAngleBtn').classList.add('active');
             this.updateStatus('Click on an angle to assign a value');
@@ -321,7 +460,7 @@ class GeometryTool {
     }
     
     handleCanvasClick = (e) => {
-        debugLogger.log('GeometryTool.handleCanvasClick', { 
+        debugLogger.log('Creator.handleCanvasClick', { 
             tool: this.currentTool,
             target: e.target.tagName 
         });
@@ -330,11 +469,14 @@ class GeometryTool {
                 const pt = this.getSVGPoint(e);
                 
                 // Check if click is near an edge (within 5 pixels)
-                const nearbyEdge = this.findNearbyEdge(pt.x, pt.y, 5);
-                
-                if (nearbyEdge) {
+                const nearbyEdges = findNearbyEdges(pt.x, pt.y, this.edges, this.pointsMap);
+                if (nearbyEdges.length > 0) {
                     // Split the edge and add point at the closest point
-                    this.splitEdgeWithPoint(nearbyEdge.edge, nearbyEdge.closestPoint);
+                    const { x, y } = nearbyEdges[0].closestPoint;
+                    const newPoint = this.createPoint(x, y);
+                    nearbyEdges.forEach(nearbyEdge => {
+                        this.splitEdgeWithPoint(nearbyEdge.edge, newPoint);
+                    });
                 } else {
                     // Add point at click position
                     this.drawNewPoint(pt.x, pt.y);
@@ -343,8 +485,10 @@ class GeometryTool {
                 const pt = this.getSVGPoint(e);
                 this.findClosestPointAndEdges(pt.x, pt.y);
             } else if (this.currentTool === 'angleBisector') {
-                const pt = this.getSVGPoint(e);
-                this.findAndBisectAngle(pt.x, pt.y);
+                console.error('handle canvas click for angle bisector')
+                // do we need this or overkill?
+                // const pt = this.getSVGPoint(e);
+                // this.findAndBisectAngle(pt.x, pt.y);
             }
         }
     }
@@ -445,10 +589,6 @@ class GeometryTool {
         // Check if click is inside the angle (between the two edges)
         const isInsideAngle = relativeClickAngle <= angleBetweenEdges;
         
-        closestTwoEdges.forEach((edgeInfo, index) => {
-        });
-        
-        
         // Check if click forms a triangle with the 3 points
         const point1 = closestPoint;
         const point2 = closestTwoEdges[0].otherPoint;
@@ -465,12 +605,7 @@ class GeometryTool {
             const point2 = closestTwoEdges[1].otherPoint;
             
             // Check if this angle already exists
-            const angleExists = this.angles.some(a => 
-                a.point === closestPoint.id &&
-                ((a.neighborPoints[0] === point1.id && a.neighborPoints[1] === point2.id) ||
-                 (a.neighborPoints[0] === point2.id && a.neighborPoints[1] === point1.id))
-            );
-            
+            const angleExists = this.angles.some(a => isThisAngle(a, closestPoint.id, point1.id, point2.id));
             if (!angleExists) {
                 this.createAngle(closestPoint, point1, point2);
                 this.saveState();
@@ -491,41 +626,140 @@ class GeometryTool {
         };
     }
     
+    // Adds a point to any existing collinear lines and creates new lines from edges.
+    // Iterates through all lines, adding the point if collinear with any line's points.
+    // Re-sorts line arrays by position after insertion.
+    // Also checks all edges: if the point is collinear with an edge not yet in a line,
+    // creates a new line containing the edge endpoints and the point.
+    checkPointOnLines = (point) => {
+        // Track which edges we've already processed (to avoid duplicate lines)
+        const processedEdgePairs = new Set();
+        
+        // First, check each existing line to see if this point is collinear with it
+        for (const line of this.lines) {
+            // Skip if point is already in this line
+            if (line.includes(point.id)) continue;
+            
+            // Need at least 2 points in the line to check collinearity
+            if (line.length < 2) continue;
+            
+            // Get two points from the line to check collinearity
+            const point1 = this.pointsMap.get(line[0]);
+            const point2 = this.pointsMap.get(line[1]);
+            
+            if (!point1 || !point2) continue;
+            
+            // Check if the new point is collinear with the line
+            if (arePointsCollinearByPosition(point1, point2, point, 5)) {
+                // Point is collinear - add it to the line
+                line.push(point.id);
+                
+                // Re-sort the line based on actual positions
+                const linePoints = line.map(id => this.pointsMap.get(id)).filter(p => p);
+                
+                linePoints.sort((a, b) => {
+                    if (Math.abs(a.x - b.x) > 1) {
+                        return a.x - b.x;
+                    } else {
+                        return a.y - b.y;
+                    }
+                });
+                
+                // Update the line array with sorted IDs
+                line.length = 0;
+                line.push(...linePoints.map(p => p.id));
+                
+                // Mark this edge pair as processed
+                const edgeKey = [line[0], line[line.length - 1]].sort().join('-');
+                processedEdgePairs.add(edgeKey);
+            }
+        }
+        
+        // Second, check edges to see if this point is collinear with any edge
+        // and should create a NEW line
+        for (const edge of this.edges) {
+            const point1Id = edge.points[0];
+            const point2Id = edge.points[1];
+            
+            // Skip if point is already part of this edge
+            if (point1Id === point.id || point2Id === point.id) continue;
+            
+            // Skip if we already processed this edge pair
+            const edgeKey = [point1Id, point2Id].sort().join('-');
+            if (processedEdgePairs.has(edgeKey)) continue;
+            
+            // Check if there's already a line containing both edge points
+            const existingLine = this.lines.find(line => 
+                line.includes(point1Id) && line.includes(point2Id)
+            );
+            if (existingLine) continue; // Already handled by existing line check above
+            
+            const edgePoint1 = this.pointsMap.get(point1Id);
+            const edgePoint2 = this.pointsMap.get(point2Id);
+            
+            if (!edgePoint1 || !edgePoint2) continue;
+            
+            // Check if the new point is collinear with this edge
+            if (arePointsCollinearByPosition(edgePoint1, edgePoint2, point, 5)) {
+                // Create a new line with these three points
+                const linePoints = [edgePoint1, edgePoint2, point];
+                
+                // Sort by position
+                linePoints.sort((a, b) => {
+                    if (Math.abs(a.x - b.x) > 1) {
+                        return a.x - b.x;
+                    } else {
+                        return a.y - b.y;
+                    }
+                });
+                
+                const newLine = linePoints.map(p => p.id);
+                this.addLine(newLine);
+                
+                // Mark as processed
+                processedEdgePairs.add(edgeKey);
+            }
+        }
+    }
+    
     drawNewPoint = (x, y) => {
-        debugLogger.log('GeometryTool.addPoint', { x, y });
+        debugLogger.log('Creator.addPoint', { x, y });
         const pointName = getNewPointName(this.points.length);
         
         const point = {
             id: pointName,
-            x: x,
-            y: y
+            x: Math.round(x),
+            y: Math.round(y)
         };
         
         this.addPoint(point);
         this.drawPoint(point);
         this.checkPointOnCircles(point);
+        this.checkPointOnLines(point);
         this.saveState();
     }
     
     createPoint = (x, y) => {
-        debugLogger.log('GeometryTool.createPoint', { x, y });
+        debugLogger.log('Creator.createPoint', { x, y });
         const point = {
             id: getNewPointName(this.points.length),
-            x: x,
-            y: y
+            x: Math.round(x),
+            y: Math.round(y)
         };
         
         this.addPoint(point);
         this.drawPoint(point);
         
-        debugLogger.log('GeometryTool.createPoint', { x, y }, point);
+        debugLogger.log('Creator.createPoint', { x, y }, point);
         return point;
     }
 
     drawPoint = (point) => {
-        debugLogger.log('GeometryTool.drawPoint', { point });
+        debugLogger.log('Creator.drawPoint', { point });
+        const classes = ['point-group'];
+        if (point.hide) classes.push('hide');
         const group = createElement('g', {
-            class: 'point-group'
+            class: classes
         });
         group.dataset.pointId = point.id;
         // SVG doesn't use z-index the same way - use pointer-events instead
@@ -563,23 +797,6 @@ class GeometryTool {
         this.ui.canvas.svg.appendChild(group);
     }
     
-    findNeighbors = (point) => {
-        const neighbors = [];
-        
-        // Find points connected by edges
-        this.edges.forEach(edge => {
-            if (edge.points[0] === point.id) {
-                const neighbor = this.pointsMap.get(edge.points[1]);
-                if (neighbor) neighbors.push(neighbor);
-            } else if (edge.points[1] === point.id) {
-                const neighbor = this.pointsMap.get(edge.points[0]);
-                if (neighbor) neighbors.push(neighbor);
-            }
-        });
-        
-        return neighbors;
-    }
-    
     updatePointSelection = () => {
         document.querySelectorAll('.point-circle').forEach(circle => {
             const pointId = circle.parentElement.dataset.pointId;
@@ -592,7 +809,7 @@ class GeometryTool {
     }
 
     drawCircleFromPoints = () => {
-        debugLogger.log('GeometryTool.drawCircleFromPoints', { 
+        debugLogger.log('Creator.drawCircleFromPoints', { 
             selectedPoints: this.selectedPoints 
         });
         // First point is center, second point is on the circle
@@ -602,13 +819,13 @@ class GeometryTool {
         if (!centerPoint || !circlePoint) return;
         
         // Calculate radius as distance from center to circle point using utility function
-        const radius = distance(centerPoint.x, centerPoint.y, circlePoint.x, circlePoint.y);
+        const radius = Math.round(distance(centerPoint.x, centerPoint.y, circlePoint.x, circlePoint.y));
         
         // Draw circle
         const circle = createElement('circle', {
             class: 'circle-shape',
-            cx: centerPoint.x,
-            cy: centerPoint.y,
+            cx: Math.round(centerPoint.x),
+            cy: Math.round(centerPoint.y),
             r: radius
         });
         
@@ -637,8 +854,8 @@ class GeometryTool {
         });
         
         this.circles.push({ 
-            centerX: centerPoint.x, 
-            centerY: centerPoint.y, 
+            centerX: Math.round(centerPoint.x), 
+            centerY: Math.round(centerPoint.y), 
             radius, 
             centerPoint: centerPoint.id,
             pointsOnLine: pointsOnLine
@@ -650,15 +867,42 @@ class GeometryTool {
             (edge.points[1] === centerPoint.id && edge.points[0] === circlePoint.id)
         );
         
-        // Create edge if it doesn't exist
+        // Create edge if it doesn't exist (but don't save yet - create edge silently)
         if (!edgeExists) {
-            this.drawEdge(centerPoint, circlePoint);
+            // Create edge line
+            const line = createElement('line', {
+                class: 'line',
+                x1: centerPoint.x,
+                y1: centerPoint.y,
+                x2: circlePoint.x,
+                y2: circlePoint.y
+            });
+            
+            this.svg.insertBefore(line, this.svg.firstChild);
+            
+            const edgeObj = {
+                points: [centerPoint.id, circlePoint.id],
+                element: line
+            };
+            
+            this.edges.push(edgeObj);
+            
+            // Update adjacency map
+            this.addAdjacentPoint(centerPoint.id, circlePoint.id);
+            this.addAdjacentPoint(circlePoint.id, centerPoint.id);
+            
+            // Auto-create angles at both endpoints
+            this.createAnglesForNewEdge(centerPoint.id, circlePoint.id);
         }
         
-        this.historyManager.saveState();
+        // Save state ONCE for the entire circle creation (including edge)
+        this.saveState();
     }
 
-    // Edge management methods
+    // Creates a visual edge (line) between two points on the canvas.
+    // Checks for duplicate edges, creates an SVG line element, updates the adjacency map,
+    // and auto-creates angles at both endpoints where 2+ edges meet.
+    // Returns the created edge object or undefined if edge already exists.
     drawEdge = (point1, point2) => {
         debugLogger.log('drawEdge', { 
             selectedPoints: this.selectedPoints 
@@ -691,8 +935,7 @@ class GeometryTool {
         
         const edgeObj = {
             points: [point1.id, point2.id],
-            element: line,
-            notes: ''
+            element: line
         };
         
         this.edges.push(edgeObj);
@@ -705,8 +948,7 @@ class GeometryTool {
         this.createAnglesForNewEdge(point1.id, point2.id);
         
         this.updateStatus('Edge created');
-        this.checkSolvability();
-        this.historyManager.saveState();
+        this.saveState();
         
         return edgeObj;
     }
@@ -723,11 +965,11 @@ class GeometryTool {
             // First, check if any existing angles are being split by this new edge
             // If so, increase their radius by 10 pixels
             this.angles.forEach(angle => {
-                if (angle.point !== pointId) return;
-                if (!angle.neighborPoints || angle.neighborPoints.length !== 2) return;
+                if (angle.pointId !== pointId) return;
+                if (!angle.sidepoints || angle.sidepoints.length !== 2) return;
                 
-                const angleNeighbor1 = angle.neighborPoints[0];
-                const angleNeighbor2 = angle.neighborPoints[1];
+                const angleNeighbor1 = angle.sidepoints[0];
+                const angleNeighbor2 = angle.sidepoints[1];
                 
                 // Check if the new edge goes through this angle (splits it)
                 // This happens when neither of the angle's neighbors is the new edge neighbor,
@@ -738,22 +980,28 @@ class GeometryTool {
                     const p2 = this.pointsMap.get(angleNeighbor2);
                     const pNew = this.pointsMap.get(newEdgeNeighbor);
                     
-                if (vertex && p1 && p2 && pNew && isPointInsideAngle(vertex, p1, p2, pNew)) {
-                    // This angle is being split - increase its radius by 10px
-                    if (angle.arcElement) {
-                        this.increaseAngleRadius(angle.arcElement, 10);
-                        angle.radius = (angle.radius || 30) + 10; // Update the angle object's radius
-                        
-                        // Mark this angle as split
-                        angle.isSplit = true;
+                    if (vertex && p1 && p2 && pNew && isPointInsideAngle(vertex, p1, p2, pNew)) {
+                        // This angle is being split - increase its radius by 10px
+                        if (angle.groupElement) {
+                            const arcElement = angle.groupElement.querySelector('path');
+                            if (arcElement) {
+                                const currentPath = arcElement.getAttribute('d');
+                                const updatedPath = increaseAngleRadius(currentPath, 10);
+                                if (updatedPath) { 
+                                    arcElement.setAttribute('d', updatedPath); 
+                                }
+                                angle.radius = (angle.radius || 30) + 10; // Update the angle object's radius
+                                
+                                // Mark this angle as split
+                                angle.isSplit = true;
+                            }
+                        }
                     }
-                }
                 }
             });
             
             // Collect all angle pairs that need to be created
             const anglesToCreate = [];
-            
             for (let i = 0; i < neighborArray.length; i++) {
                 for (let j = i + 1; j < neighborArray.length; j++) {
                     const neighbor1 = neighborArray[i];
@@ -767,15 +1015,7 @@ class GeometryTool {
                     }
                     
                     // Check if angle already exists
-                    const angleExists = this.angles.some(angle => 
-                        angle.point === pointId &&
-                        angle.neighborPoints &&
-                        angle.neighborPoints.length === 2 &&
-                        (
-                            (angle.neighborPoints[0] === neighbor1 && angle.neighborPoints[1] === neighbor2) ||
-                            (angle.neighborPoints[0] === neighbor2 && angle.neighborPoints[1] === neighbor1)
-                        )
-                    );
+                    const angleExists = this.angles.some(angle => isThisAngle(angle, pointId, neighbor1, neighbor2));
                     
                     if (!angleExists) {
                         const vertex = this.pointsMap.get(pointId);
@@ -811,134 +1051,12 @@ class GeometryTool {
                 this.createAngle(angleData.vertex, angleData.point1, angleData.point2);
             });
         });
-    }
-    
-    // isPointInsideAngle moved to mathHelper.mjs and imported
-    // lineIntersection - duplicate removed, use mathHelper.lineIntersection  
-    // getUnusedGreekLetter moved to mathHelper.mjs and imported
-    // clipLineToCanvas - duplicate removed, use mathHelper.clipLineToCanvas
-    
-    increaseAngleRadius = (arcElement, increaseBy) => {
-        const currentPath = arcElement.getAttribute('d');
-        
-        // Parse the path to extract radius value(s)
-        // Path format for arc: M x y L x1 y1 A radius radius 0 largeArc sweep x2 y2 Z
-        // Path format for square: M x y L x1 y1 L x2 y2 L x3 y3 Z
-        
-        const arcMatch = currentPath.match(/A\s+([\d.]+)\s+([\d.]+)/);
-        if (arcMatch) {
-            // It's an arc path
-            const oldRadius = parseFloat(arcMatch[1]);
-            const newRadius = oldRadius + increaseBy;
-            
-            // Replace the radius in the path
-            const newPath = currentPath.replace(
-                /A\s+([\d.]+)\s+([\d.]+)/,
-                `A ${newRadius} ${newRadius}`
-            );
-            
-            // Need to recalculate the arc endpoints
-            // Extract vertex position (first M command)
-            const vertexMatch = currentPath.match(/M\s+([\d.]+)\s+([\d.]+)/);
-            const lineMatch = currentPath.match(/L\s+([\d.]+)\s+([\d.]+)/);
-            
-            if (vertexMatch && lineMatch) {
-                const vx = parseFloat(vertexMatch[1]);
-                const vy = parseFloat(vertexMatch[2]);
-                const startX = parseFloat(lineMatch[1]);
-                const startY = parseFloat(lineMatch[2]);
-                
-                // Calculate start angle
-                const startAngle = Math.atan2(startY - vy, startX - vx);
-                
-                // Get the sweep and large arc flags
-                const flagsMatch = currentPath.match(/A\s+[\d.]+\s+[\d.]+\s+0\s+(\d)\s+(\d)/);
-                const largeArc = flagsMatch ? flagsMatch[1] : '0';
-                const sweep = flagsMatch ? flagsMatch[2] : '1';
-                
-                // Extract end point
-                const endMatch = currentPath.match(/A[^Z]+\s+([\d.]+)\s+([\d.]+)\s*Z/);
-                if (endMatch) {
-                    const endX = parseFloat(endMatch[1]);
-                    const endY = parseFloat(endMatch[2]);
-                    const endAngle = Math.atan2(endY - vy, endX - vx);
-                    
-                    // Recalculate with new radius
-                    const newStartX = vx + newRadius * Math.cos(startAngle);
-                    const newStartY = vy + newRadius * Math.sin(startAngle);
-                    const newEndX = vx + newRadius * Math.cos(endAngle);
-                    const newEndY = vy + newRadius * Math.sin(endAngle);
-                    
-                    const updatedPath = `M ${vx} ${vy} L ${newStartX} ${newStartY} A ${newRadius} ${newRadius} 0 ${largeArc} ${sweep} ${newEndX} ${newEndY} Z`;
-                    arcElement.setAttribute('d', updatedPath);
-                }
-            }
-        } else {
-            // It's a square corner path - increase the square size
-            const lines = currentPath.match(/L\s+([\d.]+)\s+([\d.]+)/g);
-            if (lines && lines.length >= 3) {
-                const vertexMatch = currentPath.match(/M\s+([\d.]+)\s+([\d.]+)/);
-                if (vertexMatch) {
-                    const vx = parseFloat(vertexMatch[1]);
-                    const vy = parseFloat(vertexMatch[2]);
-                    
-                    // Extract the three L points
-                    const coords = lines.map(line => {
-                        const match = line.match(/L\s+([\d.]+)\s+([\d.]+)/);
-                        return { x: parseFloat(match[1]), y: parseFloat(match[2]) };
-                    });
-                    
-                    // Calculate angles
-                    const angle1 = Math.atan2(coords[0].y - vy, coords[0].x - vx);
-                    const angle2 = Math.atan2(coords[2].y - vy, coords[2].x - vx);
-                    
-                    // Current square size
-                    const oldSize = Math.sqrt((coords[0].x - vx) ** 2 + (coords[0].y - vy) ** 2);
-                    const newSize = oldSize + increaseBy;
-                    
-                    // Recalculate square corner
-                    const newStartX = vx + newSize * Math.cos(angle1);
-                    const newStartY = vy + newSize * Math.sin(angle1);
-                    const newEndX = vx + newSize * Math.cos(angle2);
-                    const newEndY = vy + newSize * Math.sin(angle2);
-                    const newCornerX = vx + newSize * Math.cos(angle1) + newSize * Math.cos(angle2);
-                    const newCornerY = vy + newSize * Math.sin(angle1) + newSize * Math.sin(angle2);
-                    
-                    const updatedPath = `M ${vx} ${vy} L ${newStartX} ${newStartY} L ${newCornerX} ${newCornerY} L ${newEndX} ${newEndY} Z`;
-                    arcElement.setAttribute('d', updatedPath);
-                }
-            }
-        }
-    }
+    }    
 
-    findNearbyEdge = (x, y, threshold) => {
-        debugLogger.log('findNearbyEdge', { x, y, threshold });
-        let closestEdge = null;
-        let closestDistance = threshold;
-        let closestPoint = null;
-        
-        for (const edge of this.edges) {
-            const point1 = this.pointsMap.get(edge.points[0]);
-            const point2 = this.pointsMap.get(edge.points[1]);
-            
-            if (!point1 || !point2) continue;
-            
-            // Calculate distance from point to line segment
-            const result = pointToSegmentDistance(x, y, point1.x, point1.y, point2.x, point2.y);
-            
-            if (result.distance < closestDistance) {
-                closestDistance = result.distance;
-                closestEdge = edge;
-                closestPoint = result.closestPoint;
-            }
-        }
-        return closestEdge ? { edge: closestEdge, closestPoint, distance: closestDistance } : null;
-    }
-
-    splitEdgeWithPoint = (edge, point) => {
+    splitEdgeWithPoint = (edge, newPoint) => {
         debugLogger.log('splitEdgeWithPoint', { 
             edgePoints: edge.points, 
-            point 
+            newPoint 
         });
 
         const [id1, id2] = edge.points;
@@ -946,9 +1064,6 @@ class GeometryTool {
         const point2 = this.pointsMap.get(id2);
         
         if (!point1 || !point2) return;
-        
-        // Create new point at the point on the edge
-        const newPoint = this.createPoint(point.x, point.y);
         
         // Keep the old edge in the array but remove its visual element
         edge.element.remove();
@@ -976,7 +1091,7 @@ class GeometryTool {
             }
         } else {
             // Create a new line array with the three collinear points
-            this.lines.push([id1, newPoint.id, id2]);
+            this.addLine([id1, newPoint.id, id2]);
         }
         
         // Create two new edges: point1 to newPoint and newPoint to point2
@@ -991,8 +1106,7 @@ class GeometryTool {
         
         this.edges.push({
             points: [id1, newPoint.id],
-            element: line1,
-            notes: ''
+            element: line1
         });
         
         // Update adjacency map for first edge
@@ -1010,8 +1124,7 @@ class GeometryTool {
         
         this.edges.push({
             points: [newPoint.id, id2],
-            element: line2,
-            notes: ''
+            element: line2
         });
         
         // Update adjacency map for second edge
@@ -1027,256 +1140,20 @@ class GeometryTool {
         }
         
         this.updateStatus(`Edge split with new point ${newPoint.id}`);
-        this.historyManager.saveState();
+        this.saveState();
         
         // Auto-create angles at the new point with its neighbors
-        this.createAnglesForNewEdge(id1, newPoint.id);
-        this.createAnglesForNewEdge(newPoint.id, id2);
+        // if (!existingLine || !existingLine.includes(newPoint.id) || !existingLine.includes(id1) || !existingLine.includes(id2)) {
+        //     this.createAnglesForNewEdge(id1, newPoint.id);
+        //     this.createAnglesForNewEdge(newPoint.id, id2);
+        // }
+        
+        // Recreate all angles to ensure angles at all vertices are properly created
+        this.recreateAllAngles();
         
         return newPoint;
     }
 
-    extendEdgeFromPoints = () => {
-        debugLogger.log('extendEdgeFromPoints', { 
-            selectedPoints: this.selectedPoints 
-        });
-        const point1 = this.pointsMap.get(this.selectedPoints[0]);
-        const point2 = this.pointsMap.get(this.selectedPoints[1]);
-        
-        if (!point1 || !point2) return;
-        
-        // Check if the two points have a common edge
-        const commonEdge = this.edges.find(edge => 
-            (edge.points[0] === point1.id && edge.points[1] === point2.id) ||
-            (edge.points[0] === point2.id && edge.points[1] === point1.id)
-        );
-        
-        if (!commonEdge) {
-            this.updateStatus('Selected points must be connected by an edge');
-            return;
-        }
-        
-        // Calculate direction vector from point1 to point2
-        const dx = point2.x - point1.x;
-        const dy = point2.y - point1.y;
-        const length = Math.sqrt(dx * dx + dy * dy);
-        
-        // Normalize direction
-        const dirX = dx / length;
-        const dirY = dy / length;
-        
-        // Extend from point2 in the same direction
-        const maxExtension = 300;
-        const endX = point2.x + dirX * maxExtension;
-        const endY = point2.y + dirY * maxExtension;
-        
-        // Find intersection with other edges
-        let closestIntersection = null;
-        let closestDistance = maxExtension;
-        let intersectedEdge = null;
-        
-        for (const edge of this.edges) {
-            // Skip the common edge and edges connected to point2
-            if (edge === commonEdge || edge.points[0] === point2.id || edge.points[1] === point2.id) {
-                continue;
-            }
-            
-            const edgePoint1 = this.pointsMap.get(edge.points[0]);
-            const edgePoint2 = this.pointsMap.get(edge.points[1]);
-            
-            if (!edgePoint1 || !edgePoint2) continue;
-            
-            // Check intersection between extension line and this edge
-            const intersection = lineIntersection(
-                point2.x, point2.y, endX, endY,
-                edgePoint1.x, edgePoint1.y, edgePoint2.x, edgePoint2.y
-            );
-            
-            if (intersection) {
-                const dist = Math.sqrt(
-                    (intersection.x - point2.x) ** 2 + 
-                    (intersection.y - point2.y) ** 2
-                );
-                
-                if (dist < closestDistance && dist > 0.1) { // Avoid very small distances
-                    closestDistance = dist;
-                    closestIntersection = intersection;
-                    intersectedEdge = edge;
-                }
-            }
-        }
-        
-        // Create new point at intersection or at max distance
-        let newPoint;
-        if (closestIntersection) {
-            // Create point at intersection point
-            newPoint = this.createPoint(closestIntersection.x, closestIntersection.y);
-            this.updateStatus(`Edge extended to intersection (${closestDistance.toFixed(1)}px)`);
-        } else {
-            // No intersection found, create point at max distance
-            newPoint = this.createPoint(
-                point2.x + dirX * maxExtension,
-                point2.y + dirY * maxExtension
-            );
-            this.updateStatus(`Edge extended to maximum distance (${maxExtension}px)`);
-        }
-        
-        // Create edge from point2 to new point
-        const line = createElement('line', {
-            class: 'line',
-            x1: point2.x,
-            y1: point2.y,
-            x2: newPoint.x,
-            y2: newPoint.y
-        });
-        
-        this.svg.insertBefore(line, this.svg.firstChild);
-        
-        this.edges.push({
-            points: [point2.id, newPoint.id],
-            element: line,
-            notes: ''
-        });
-        
-        // Update adjacency map for the new edge
-        this.addAdjacentPoint(point2.id, newPoint.id);
-        this.addAdjacentPoint(newPoint.id, point2.id);
-        
-        // Check if point1 and point2 are already on a line (extension is continuing a line)
-        const extensionLine = this.lines.find(line => 
-            line.includes(point1.id) && line.includes(point2.id)
-        );
-        
-        if (extensionLine) {
-            // Check if newPoint already exists in the line
-            if (extensionLine.includes(newPoint.id)) {
-                // Point already in line, skip
-            } else {
-                // Check if point2 (the extension point) is at the start or end of the line
-                const point2Index = extensionLine.indexOf(point2.id);
-                
-                if (point2Index === 0) {
-                    // point2 is at the start, add newPoint at the beginning
-                    extensionLine.unshift(newPoint.id);
-                } else if (point2Index === extensionLine.length - 1) {
-                    // point2 is at the end, add newPoint at the end
-                    extensionLine.push(newPoint.id);
-                } else {
-                    // point2 is in the middle - this shouldn't happen for edge extension
-                    // But if it does, maintain sorted order by distance
-                    console.warn(`Warning: Extending from middle point ${point2.id} in line`);
-                    extensionLine.push(newPoint.id);
-                    const firstPoint = this.pointsMap.get(extensionLine[0]);
-                    extensionLine.sort((a, b) => {
-                        const aPoint = this.pointsMap.get(a);
-                        const bPoint = this.pointsMap.get(b);
-                        const aDist = distance(firstPoint.x, firstPoint.y, aPoint.x, aPoint.y);
-                        const bDist = distance(firstPoint.x, firstPoint.y, bPoint.x, bPoint.y);
-                        return aDist - bDist;
-                    });
-                }
-            }
-        } else {
-            // Create a new line array with the three collinear points
-            // Sort by x-coordinate (or y if vertical) to maintain consistent left-to-right order
-            const newLine = [point1.id, point2.id, newPoint.id];
-            newLine.sort((a, b) => {
-                const aPoint = this.pointsMap.get(a);
-                const bPoint = this.pointsMap.get(b);
-                // Sort by x-coordinate (handles horizontal lines)
-                if (Math.abs(aPoint.x - bPoint.x) > 1) {
-                    return aPoint.x - bPoint.x;
-                }
-                // If x is same (vertical line), sort by y-coordinate
-                return aPoint.y - bPoint.y;
-            });
-            this.lines.push(newLine);
-        }
-        
-        // If there was an intersection, split the intersected edge
-        if (closestIntersection && intersectedEdge) {
-            const edgePoint1 = this.pointsMap.get(intersectedEdge.points[0]);
-            const edgePoint2 = this.pointsMap.get(intersectedEdge.points[1]);
-            
-            // Keep the old edge in the array but remove its visual element
-            intersectedEdge.element.remove();
-            // Note: We don't remove the edge from this.edges array anymore
-            
-            // Track collinear points: the new point splits the edge into two segments
-            // Check if there's already a line containing both edgePoint1 and edgePoint2
-            const existingLine = this.lines.find(line => 
-                line.includes(edgePoint1.id) && line.includes(edgePoint2.id)
-            );
-            
-            if (existingLine) {
-                // Check if newPoint already exists in the line
-                if (!existingLine.includes(newPoint.id)) {
-                    // Insert newPoint between edgePoint1 and edgePoint2 in the existing line
-                    const idx1 = existingLine.indexOf(edgePoint1.id);
-                    const idx2 = existingLine.indexOf(edgePoint2.id);
-                    const insertIdx = Math.min(idx1, idx2) + 1;
-                    existingLine.splice(insertIdx, 0, newPoint.id);
-                }
-            } else {
-                // Create a new line array with the three collinear points
-                this.lines.push([edgePoint1.id, newPoint.id, edgePoint2.id]);
-            }
-            
-            // Create two new edges: from edgePoint1 to newPoint and from newPoint to edgePoint2
-            const line1 = createElement('line', {
-                class: 'line',
-                x1: edgePoint1.x,
-                y1: edgePoint1.y,
-                x2: newPoint.x,
-                y2: newPoint.y
-            });
-            this.svg.insertBefore(line1, this.svg.firstChild);
-            
-            const line2 = createElement('line', {
-                class: 'line',
-                x1: newPoint.x,
-                y1: newPoint.y,
-                x2: edgePoint2.x,
-                y2: edgePoint2.y
-            });
-            this.svg.insertBefore(line2, this.svg.firstChild);
-            
-            this.edges.push({
-                points: [edgePoint1.id, newPoint.id],
-                element: line1,
-                notes: ''
-            });
-            
-            this.edges.push({
-                points: [newPoint.id, edgePoint2.id],
-                element: line2,
-                notes: ''
-            });
-            
-            // Update adjacency map for the split edges
-            this.addAdjacentPoint(edgePoint1.id, newPoint.id);
-            this.addAdjacentPoint(newPoint.id, edgePoint1.id);
-            this.addAdjacentPoint(newPoint.id, edgePoint2.id);
-            this.addAdjacentPoint(edgePoint2.id, newPoint.id);
-            
-            // Remove old adjacency between edgePoint1 and edgePoint2 since they're no longer directly connected
-            if (this.adjacentPoints.has(edgePoint1.id)) {
-                this.adjacentPoints.get(edgePoint1.id).delete(edgePoint2.id);
-            }
-            if (this.adjacentPoints.has(edgePoint2.id)) {
-                this.adjacentPoints.get(edgePoint2.id).delete(edgePoint1.id);
-            }
-            
-            // Auto-create angles at all affected points
-            this.autoCreateAnglesForEdge([point1.id, point2.id, newPoint.id, edgePoint1.id, edgePoint2.id]);
-        } else {
-            // No intersection - auto-create angles at all points on the line
-            this.autoCreateAnglesForEdge([point1.id, point2.id, newPoint.id]);
-        }
-        
-        this.historyManager.saveState();
-    }
-    
     addAdjacentPoint = (pointId, adjacentPointId) => {
         if (!this.adjacentPoints.has(pointId)) {
             this.adjacentPoints.set(pointId, new Set());
@@ -1292,56 +1169,15 @@ class GeometryTool {
     
     updateTriangles = () => {
         // Clear existing triangles
-        this.triangles = [];
-        
-        // Get all points that have adjacency relationships
-        const pointIds = Array.from(this.adjacentPoints.keys());
-        
-        // Check all combinations of 3 points
-        for (let i = 0; i < pointIds.length; i++) {
-            for (let j = i + 1; j < pointIds.length; j++) {
-                for (let k = j + 1; k < pointIds.length; k++) {
-                    const p1 = pointIds[i];
-                    const p2 = pointIds[j];
-                    const p3 = pointIds[k];
-                    
-                    // Check if these 3 points form a triangle
-                    // A triangle exists if each pair of points is connected (adjacent)
-                    const p1Adjacent = this.adjacentPoints.get(p1) || new Set();
-                    const p2Adjacent = this.adjacentPoints.get(p2) || new Set();
-                    const p3Adjacent = this.adjacentPoints.get(p3) || new Set();
-                    
-                    const hasEdge12 = p1Adjacent.has(p2) || p2Adjacent.has(p1);
-                    const hasEdge13 = p1Adjacent.has(p3) || p3Adjacent.has(p1);
-                    const hasEdge23 = p2Adjacent.has(p3) || p3Adjacent.has(p2);
-                    
-                    if (hasEdge12 && hasEdge13 && hasEdge23) {
-                        // Check if the three points are collinear - if so, skip (not a valid triangle)
-                        const areCollinear = this.lines.some(line => 
-                            line.includes(p1) && line.includes(p2) && line.includes(p3)
-                        );
-                        
-                        if (!areCollinear) {
-                            // Create a Set with the 3 point IDs (sorted for consistency)
-                            const triangle = new Set([p1, p2, p3]);
-                            this.triangles.push(triangle);
-                        }
-                    }
-                }
-            }
-        }
-        
-        debugLogger.log('GeometryTool.updateTriangles', { 
-            triangleCount: this.triangles.length,
-            triangles: this.triangles.map(t => Array.from(t).sort())
-        });
+        this.triangles = getTriangles(this.angles, this.adjacentPoints, this.lines, this.pointsMap);
     }
 
     handlePointClick = (point) => {
-        debugLogger.log('GeometryTool.handlePointClick', { point, tool: this.currentTool });
+        debugLogger.log('Creator.handlePointClick', { point, tool: this.currentTool });
         if (this.currentTool === 'addPoint') {
-            // Show point menu for notes
-            this.ui.canvas.showPointMenu(point);
+            // When addPoint tool is active and user clicks on existing point,
+            // show the point menu dialog to create a new point from this one
+            this.messagingHub.emit(Messages.POINT_MENU_REQUESTED, point);
         } else if (this.currentTool === 'drawCircle') {
             if (this.selectedPoints.includes(point.id)) {
                 // Deselect
@@ -1365,6 +1201,15 @@ class GeometryTool {
                 this.updateStatus('Select point on circle');
             }
         } else if (this.currentTool === 'drawEdge') {
+            // Check if clicking the same point twice consecutively
+            if (this.selectedPoints.length === 1 && this.selectedPoints[0] === point.id) {
+                // Clicking same point twice - deselect
+                this.selectedPoints = [];
+                this.updatePointSelection();
+                this.updateStatus('Select 2 points to draw an edge');
+                return;
+            }
+            
             if (this.selectedPoints.includes(point.id)) {
                 // Deselect
                 this.selectedPoints = this.selectedPoints.filter(id => id !== point.id);
@@ -1383,39 +1228,66 @@ class GeometryTool {
             }
             
             this.updateStatus(`Selected ${this.selectedPoints.length}/2 points`);
-        } else if (this.currentTool === 'extendEdge') {
-            if (this.selectedPoints.includes(point.id)) {
-                // Deselect
-                this.selectedPoints = this.selectedPoints.filter(id => id !== point.id);
-            } else {
-                this.selectedPoints.push(point.id);
-            }
-            
-            this.updatePointSelection();
-            
-            if (this.selectedPoints.length === 2) {
-                this.extendEdgeFromPoints();
-                this.selectedPoints = [];
-                this.updatePointSelection();
-            }
-            
-            this.updateStatus(`Selected ${this.selectedPoints.length}/2 points`);
         }
+    }
+
+    /**
+     * Recreate all possible angles based on current geometry.
+     * For each point with 2+ adjacent points, creates angles for all pairs.
+     * This is used after creating intersection points or restoring state.
+     */
+    recreateAllAngles = () => {
+        const angleData = [];
+        this.points.forEach(point => {
+            const adjacentPoints = this.adjacentPoints.get(point.id);
+            if (!adjacentPoints || adjacentPoints.size < 2) return;
+            
+            const adjArray = Array.from(adjacentPoints);
+            
+            // Create angles at this vertex for all pairs of adjacent points
+            for (let i = 0; i < adjArray.length; i++) {
+                for (let j = i + 1; j < adjArray.length; j++) {
+                    const adjPoint1 = this.pointsMap.get(adjArray[i]);
+                    const adjPoint2 = this.pointsMap.get(adjArray[j]);
+                    if (adjPoint1 && adjPoint2) {
+                        // createAngle will skip if the 3 points are collinear
+                        if (this.lines.some(line => (
+                            line.includes(point.id) &&
+                            line.includes(adjPoint1.id) &&
+                            line.includes(adjPoint2.id)
+                        ))) {
+                            continue; // Skip if point is collinear with either adjacent point
+                        }
+                        const { angleDegrees } = getAngleCalculatedInfo(point, adjPoint1, adjPoint2);
+                        angleData.push({
+                            vertex: point,
+                            point1: adjPoint1,
+                            point2: adjPoint2,
+                            angleDegrees
+                        });
+                        // this.createAngle(point, adjPoint1, adjPoint2);
+                    }
+                }
+            }
+        });
+
+        angleData.sort((a, b) => b.angleDegrees - a.angleDegrees);
+
+        angleData.forEach(data => {
+            this.createAngle(data.vertex, data.point1, data.point2);
+        });
     }
     
     createAngle = (vertex, point1, point2) => {
         // Create a unique key for this specific angle
+        if (this.angles.some(a => isThisAngle(a, vertex.id, point1.id, point2.id))) {
+            return;
+        }
         const neighborIds = [point1.id, point2.id].sort((a, b) => a - b);
         const angleKey = `${vertex.id}-${neighborIds[0]}-${neighborIds[1]}`;
         
         // Check if this angle already exists
-        const existingAngle = this.angles.find(a => 
-            a.point === vertex.id &&
-            a.neighborPoints &&
-            a.neighborPoints.length === 2 &&
-            ((a.neighborPoints[0] === point1.id && a.neighborPoints[1] === point2.id) ||
-             (a.neighborPoints[0] === point2.id && a.neighborPoints[1] === point1.id))
-        );
+        const existingAngle = this.angles.find(a => isThisAngle(a, vertex.id, point1.id, point2.id));
         
         if (existingAngle) {
             // Angle already exists, don't create duplicate
@@ -1427,16 +1299,20 @@ class GeometryTool {
             return;
         }
         
-        // NOTE: We no longer skip redundant/overlapping angles here - they are created but hidden in drawAngleArc
+        // Note: Redundant/overlapping angles are still created but marked as hidden in drawAngleArc.
         
         // Calculate angle between three points using utility functions
-        let angle1 = angleToPoint(vertex.x, vertex.y, point1.x, point1.y);
-        let angle2 = angleToPoint(vertex.x, vertex.y, point2.x, point2.y);
-        
-        let angleDiff = angle2 - angle1;
-        
+        const calculatedValues = getAngleCalculatedInfo(vertex, point1, point2);
+        if (!calculatedValues) { return; }
+        const {
+            angle1,
+            angle2,
+            angleDegrees,
+            radius
+        } = calculatedValues;
+
         // Normalize to [0, 2π]
-        angleDiff = normalizeAngle(angleDiff);
+        const angleDiff = normalizeAngle(angle2 - angle1);
         
         // Only show if angle < 180°
         if (angleDiff > Math.PI) {
@@ -1445,32 +1321,182 @@ class GeometryTool {
             [angle1, angle2] = [angle2, angle1];
         }
         
-        
-        // Only draw angles that are meaningfully less than 180° (avoid straight lines)
-        const angleDegrees = radiansToDegrees(angleDiff);
-        if (angleDiff < Math.PI && angleDiff > 0.1 && angleDegrees < 179) {
-            this.drawAngleArc(vertex, angle1, angle2, angleDiff, point1, point2);
-        } else {
+        if ((angleDiff < Math.PI && angleDiff > 0.1 && angleDegrees < 179) === false) {
+            return;
         }
+
+        const angleId = Date.now() + Math.random();
+        
+        // Generate angle name (e.g., "∠ABC" where B is vertex)
+        const angleName = getAngleNameFromPoints(vertex.id, point1.id, point2.id);
+        
+         
+        // Check if all 3 points (vertex + both sidepoints) are in the same triangle
+        const isAngleInTriangle = isAngleInTriangleByEdges(vertex.id, point1.id, point2.id, this.adjacentPoints);
+        
+        // Check if vertex is on a line (supplementary angle scenario)
+        // Supplementary angles should be shown even if not all 3 points are in a triangle
+        const isSupplementaryAngle = this.lines.some(line => line.includes(vertex.id));
+        
+        // Show angle if: (in triangle OR supplementary) AND not overlapping
+        const shouldHide = false ;//(!isAngleInTriangle && !isSupplementaryAngle);
+
+        // Create angle data object (pure data, no DOM references)
+        const angleData = {
+            id: angleId,
+            pointId: vertex.id,
+            sidepoints: [point1.id, point2.id],
+            value: null,
+            calculatedValue: angleDegrees,
+            name: angleName,
+            label: '',
+            radius: radius,
+            startAngle: angle1,
+            endAngle: angle2,
+            groupElement: null,
+            hide: shouldHide,
+        };
+        
+        this.angles.push(angleData);
+        // return angleData;
+
+        this.renderAngleArc(angleData);
     }
     
-    drawAngleArc(vertex, startAngle, endAngle, angleDiff, point1, point2) {
-        const angleDegrees = radiansToDegrees(angleDiff);
+    /**
+     * Renders angle arc UI elements for an angle data object.
+     * Creates SVG group with path and text, adds event handlers, inserts into DOM.
+     * @param {Object} angleData - Angle data object from createAngleData
+     */
+
+    // Helper method to calculate angle text position with overlap detection
+    // Used by both renderAngleArc and redrawAngleArc to ensure consistent text positioning
+    // @param {Object} angleData - Angle data object
+    // @param {SVGElement} textElement - Optional existing text element (skips in overlap check)
+    // @param {number} initialX - Optional initial X position (uses pre-calculated value, skips recalculation)
+    // @param {number} initialY - Optional initial Y position (uses pre-calculated value, skips recalculation)
+    // @returns {Object} { x: textX, y: textY } or null if vertex not found
+    createAngleText = (angleData, textElement = null, initialX = null, initialY = null) => {
+        const vertex = this.pointsMap.get(angleData.pointId);
+        if (!vertex) return null;
         
-        // Calculate radius based on angle value: 20 + (angle / 5)
-        // This makes larger angles have larger arcs for better visibility
-        const radius = 20 + (angleDegrees / 5);
+        const { startAngle, endAngle, radius } = angleData;
+        const angleDegrees = angleData.calculatedValue;
+        let angleDiff = endAngle - startAngle;
         
+        // Normalize angleDiff to [0, 2π]
+        while (angleDiff < 0) angleDiff += 2 * Math.PI;
+        while (angleDiff > 2 * Math.PI) angleDiff -= 2 * Math.PI;
         
+        // If initial position is provided, use it exactly without recalculation
+        if (initialX !== null && initialY !== null) {
+            return { x: initialX, y: initialY };
+        }
+        
+        // Calculate midAngle correctly
+        let midAngle;
+        if (angleDiff > Math.PI) {
+            // Large angle - use the smaller arc's midpoint instead
+            angleDiff = 2 * Math.PI - angleDiff;
+            midAngle = endAngle + angleDiff / 2;
+        } else {
+            // Normal case: midpoint between start and end
+            midAngle = startAngle + angleDiff / 2;
+        }
+        
+        const baseTextOffset = angleDegrees < 30 ? 8 : (angleDegrees > 90 ? 12 : 10);
+        const textRadius = radius + baseTextOffset;
+        
+        // Calculate initial position from scratch
+        let textX = vertex.x + textRadius * Math.cos(midAngle);
+        let textY = vertex.y + textRadius * Math.sin(midAngle);
+        
+        // Overlap detection and adjustment
+        const overlapThreshold = 20;
+        // Use proportional offset distance based on angle size (half the additional distance for small angles)
+        const offsetDistance = angleDegrees < 30 ? 7.5 : (angleDegrees > 90 ? 15 : 10);
+        
+        let hasTextOverlap = true;
+        let attempts = 0;
+        const maxAttempts = 16;
+        
+        while (hasTextOverlap && attempts < maxAttempts) {
+            hasTextOverlap = false;
+            
+            // Query DOM directly for text elements at THIS vertex only
+            const anglesAtVertex = this.ui.canvas.svg.querySelectorAll(
+                `[data-angle-vertex-id="${angleData.pointId}"] text`
+            );
+            
+            for (const existingTextElement of anglesAtVertex) {
+                // Skip if this is the element we're updating
+                if (textElement && existingTextElement === textElement) {
+                    continue;
+                }
+                
+                const existingX = parseFloat(existingTextElement.getAttribute('x'));
+                const existingY = parseFloat(existingTextElement.getAttribute('y'));
+                
+                const distance = Math.sqrt(
+                    Math.pow(textX - existingX, 2) + 
+                    Math.pow(textY - existingY, 2)
+                );
+                
+                if (distance < overlapThreshold) {
+                    hasTextOverlap = true;
+                    if (attempts < 6) {
+                        // First 6 attempts: move radially outward
+                        const newRadius = textRadius + offsetDistance * (attempts / 2);
+                        textX = vertex.x + newRadius * Math.cos(midAngle);
+                        textY = vertex.y + newRadius * Math.sin(midAngle);
+                    } else {
+                        // Next 10 attempts: rotate around vertex
+                        const rotationAttempt = attempts - 6;
+                        const angleOffset = (Math.PI / 8) * rotationAttempt;
+                        const radiusMultiplier = 1 + Math.floor(rotationAttempt / 5) * 0.3;
+                        const adjustedAngle = midAngle + angleOffset;
+                        textX = vertex.x + textRadius * radiusMultiplier * Math.cos(adjustedAngle);
+                        textY = vertex.y + textRadius * radiusMultiplier * Math.sin(adjustedAngle);
+                    }
+                    break;
+                }
+            }
+            
+            attempts++;
+        }
+        
+        return { x: textX, y: textY };
+    }
+
+    renderAngleArc(angleData) {
+        const vertex = this.pointsMap.get(angleData.pointId);
+        const point1 = this.pointsMap.get(angleData.sidepoints[0]);
+        const point2 = this.pointsMap.get(angleData.sidepoints[1]);
+        if (!vertex || !point1 || !point2) {
+            console.error('Could not find points for angle:', angleData);
+            return;
+        }
+        
+        const { startAngle, endAngle, radius } = angleData;
+        const angleDegrees = angleData.calculatedValue;
+        const angleDiff = endAngle - startAngle;
+        const sameAngleNames = getSameAngleNames(angleData, this.angles, this.lines);
+        if (sameAngleNames.length > 0) {
+            const sameAnglesSelector = sameAngleNames.map(name => `[data-angle-name="${name}"]`).join(',');
+            const isAngleExistAlready = this.ui.canvas.svg.querySelector(sameAnglesSelector);
+            if (isAngleExistAlready) {
+                return;
+            }
+
+        }
         // Check if this angle is one of the two angles created by bisection
         // If so, don't show it as a square corner even if it's 90 degrees
-        const neighborIds = [point1.id, point2.id].sort((a, b) => a - b);
-        const angleKey = `${vertex.id}-${neighborIds[0]}-${neighborIds[1]}`;
-        const isFromBisection = this.linkedAngles && this.linkedAngles.has(angleKey);
-        
+        // const neighborIds = [point1.id, point2.id].sort((a, b) => a - b);
+        // const angleKey = `${vertex.id}-${neighborIds[0]}-${neighborIds[1]}`;
+
         // Check if this is exactly a 90-degree angle (either calculated or manually assigned)
         // But don't use square corner if this angle is from a bisection
-        const is90Degree = (Math.abs(angleDegrees - 90) < 0.5) && !isFromBisection;
+        const is90Degree = getAngleValue(angleData) === 90;
         
         let pathData;
         
@@ -1512,153 +1538,64 @@ class GeometryTool {
             `;
         }
         
-        const angleId = Date.now() + Math.random();
+        // Create a group element to wrap both arc and text
+        // This allows hover on either element to affect both
+
+        const group = createElement('g', {
+            class: 'angle-group',
+            'data-angle-id': angleData.id,
+            'data-angle-name': angleData.name,
+            'data-angle-vertex-id': angleData.pointId
+        });
+
         const path = createElement('path', {
             class: 'angle-arc',
             d: pathData,
-            'data-angle-id': angleId
+            'data-angle-id': angleData.id
         });
         
-        // Position for text (middle of arc)
-        let midAngle = (startAngle + endAngle) / 2;
-        
-        // Handle angle wrapping - ensure midAngle is between startAngle and endAngle
-        if (endAngle < startAngle) {
-            midAngle = startAngle + angleDiff / 2;
-        }
-        
-        const textRadius = radius + 20;
-        let textX = vertex.x + textRadius * Math.cos(midAngle);
-        let textY = vertex.y + textRadius * Math.sin(midAngle);
-        
-        // Check if there's already text near this position to prevent overlap
-        const overlapThreshold = 30; // Distance threshold for considering texts as overlapping
-        const offsetDistance = 25; // How much to offset if overlap is detected
-        
-        let hasTextOverlap = true;
-        let attempts = 0;
-        const maxAttempts = 8; // Try up to 8 positions around the point
-        
-        while (hasTextOverlap && attempts < maxAttempts) {
-            hasTextOverlap = false;
-            
-            // Check all existing angle texts at this vertex
-            for (const existingAngle of this.angles) {
-                if (existingAngle.point === vertex.id && existingAngle.textElement) {
-                    const existingX = parseFloat(existingAngle.textElement.getAttribute('x'));
-                    const existingY = parseFloat(existingAngle.textElement.getAttribute('y'));
-                    
-                    const distance = Math.sqrt(
-                        Math.pow(textX - existingX, 2) + 
-                        Math.pow(textY - existingY, 2)
-                    );
-                    
-                    if (distance < overlapThreshold) {
-                        hasTextOverlap = true;
-                        // Offset the position radially outward or rotate around
-                        if (attempts < 4) {
-                            // First 4 attempts: move radially outward
-                            const newRadius = textRadius + offsetDistance * (attempts + 1);
-                            textX = vertex.x + newRadius * Math.cos(midAngle);
-                            textY = vertex.y + newRadius * Math.sin(midAngle);
-                        } else {
-                            // Next attempts: rotate around the vertex
-                            const angleOffset = (Math.PI / 6) * (attempts - 3); // 30 degree increments
-                            const adjustedAngle = midAngle + angleOffset;
-                            textX = vertex.x + textRadius * Math.cos(adjustedAngle);
-                            textY = vertex.y + textRadius * Math.sin(adjustedAngle);
-                        }
-                        break;
-                    }
-                }
-            }
-            
-            attempts++;
-        }
+        // Let createAngleText calculate the text position (without initial values)
+        // This ensures fresh calculation based on current angle geometry
+        const textPosition = this.createAngleText(angleData, null);
         
         const text = createElement('text', {
             class: 'angle-text',
-            x: textX,
-            y: textY,
+            x: textPosition.x,
+            y: textPosition.y,
             dy: '0.3em',
-            'data-angle-id': angleId
+            'data-angle-id': angleData.id
         });
-        text.textContent = '?';
+        text.textContent = getAngleDisplayText(angleData);
         
-        // Generate angle name (e.g., "∠ABC" where B is vertex)
-        const angleName = `∠${point1.id}${vertex.id}${point2.id}`;
+        // Add path and text to the group
+        group.appendChild(path);
+        group.appendChild(text);
         
-        // Check if this angle overlaps with any existing angle
-        const overlappingAngles = findOverlappingAngles(vertex.id, point1.id, point2.id, this.angles, this.lines, this.pointsMap);
-        const hasOverlap = overlappingAngles.length > 0;
+        // Store the group element reference
+        angleData.groupElement = group;
         
-        // Add event handlers
+        // Add event handlers to the group - hover on group affects both children
         const clickHandler = (e) => {
             e.stopPropagation();
             this.messagingHub.emit(Messages.ANGLE_CLICKED, { angleData, event: e });
         };
         
-        path.addEventListener('click', clickHandler);
-        text.addEventListener('click', clickHandler);
+        group.addEventListener('click', clickHandler);
         
-        // Add universal hover effect: opacity 0.5 by default, 1.0 on hover
-        path.style.opacity = '0.5';
-        path.style.transition = 'opacity 0.2s';
-        
-        path.addEventListener('mouseenter', () => {
-            path.style.opacity = '1';
-        });
-        path.addEventListener('mouseleave', () => {
-            path.style.opacity = '0.5';
-        });
-        
-        // Store angle data with IDs only - always store elements
-        const angleData = {
-            id: angleId,
-            point: vertex.id,
-            neighborPoints: [point1.id, point2.id],
-            value: null,
-            calculatedValue: angleDegrees,
-            name: angleName,
-            label: '',
-            radius: radius,
-            textElement: text,  // Always store text element
-            arcElement: path,   // Always store arc element
-            isHidden: hasOverlap  // Mark as hidden if overlapping
-        };
-        
-        this.angles.push(angleData);
-        
-        // If this angle overlaps with existing angles, track the relationship
-        if (hasOverlap) {
-            const primaryAngle = overlappingAngles[0]; // Use first overlapping angle as primary
-            
-            // Add to overlappingAngles map (bidirectional)
-            if (!this.overlappingAngles.has(primaryAngle.id)) {
-                this.overlappingAngles.set(primaryAngle.id, new Set([primaryAngle.id]));
-            }
-            this.overlappingAngles.get(primaryAngle.id).add(angleId);
-            this.overlappingAngles.set(angleId, this.overlappingAngles.get(primaryAngle.id));
-            
-            // Hide overlapping angles by setting display:none
-            path.style.display = 'none';
-            text.style.display = 'none';
+        // Hide if shouldHide (overlapping OR not in triangle and not supplementary)
+        if (angleData.hide) {
+            group.style.display = 'none';
         }
         
         // Always add DOM elements to SVG (even if hidden)
         // Insert BEFORE points so angles appear behind points
         const firstPointGroup = this.ui.canvas.svg.querySelector('.point-group');
         if (firstPointGroup) {
-            this.ui.canvas.svg.insertBefore(path, firstPointGroup);
-            this.ui.canvas.svg.insertBefore(text, firstPointGroup);
+            this.ui.canvas.svg.insertBefore(group, firstPointGroup);
         } else {
             // No points yet, just append
-            this.ui.canvas.svg.appendChild(path);
-            this.ui.canvas.svg.appendChild(text);
+            this.ui.canvas.svg.appendChild(group);
         }
-        
-        // After adding the angle, reorder all angles by size (larger first, smaller on top)
-        this.reorderAnglesBySize();
     }
     
     reorderAnglesBySize = () => {
@@ -1674,18 +1611,15 @@ class GeometryTool {
         
         // Reinsert angle elements in sorted order (larger angles first, so smaller appear on top)
         sortedAngles.forEach(angle => {
-            if (angle.arcElement && angle.textElement) {
+            if (angle.groupElement) {
                 // Remove from current position
-                angle.arcElement.remove();
-                angle.textElement.remove();
+                angle.groupElement.remove();
                 
                 // Reinsert in correct order
                 if (firstPointGroup) {
-                    this.ui.canvas.svg.insertBefore(angle.arcElement, firstPointGroup);
-                    this.ui.canvas.svg.insertBefore(angle.textElement, firstPointGroup);
+                    this.ui.canvas.svg.insertBefore(angle.groupElement, firstPointGroup);
                 } else {
-                    this.ui.canvas.svg.appendChild(angle.arcElement);
-                    this.ui.canvas.svg.appendChild(angle.textElement);
+                    this.ui.canvas.svg.appendChild(angle.groupElement);
                 }
             }
         });
@@ -1703,15 +1637,24 @@ class GeometryTool {
     
     redrawAngleArc = (angleData) => {
         // Skip if no DOM elements (shouldn't happen with new logic, but keep for safety)
-        if (!angleData.arcElement || !angleData.textElement) {
-            console.warn('Angle missing DOM elements:', angleData);
+        if (!angleData.groupElement) {
+            console.warn('Angle missing group element:', angleData);
+            return;
+        }
+        
+        // Get the path and text from the group
+        const arcElement = angleData.groupElement.querySelector('path');
+        const textElement = angleData.groupElement.querySelector('text');
+        
+        if (!arcElement || !textElement) {
+            console.warn('Angle group missing path or text:', angleData);
             return;
         }
         
         // Look up the actual point objects from IDs
-        const vertex = this.pointsMap.get(angleData.point);
-        const point1 = this.pointsMap.get(angleData.neighborPoints[0]);
-        const point2 = this.pointsMap.get(angleData.neighborPoints[1]);
+        const vertex = this.pointsMap.get(angleData.pointId);
+        const point1 = this.pointsMap.get(angleData.sidepoints[0]);
+        const point2 = this.pointsMap.get(angleData.sidepoints[1]);
         
         if (!vertex || !point1 || !point2) {
             console.error('Could not find points for angle:', angleData);
@@ -1789,25 +1732,21 @@ class GeometryTool {
         }
         
         // Update the arc path
-        angleData.arcElement.setAttribute('d', pathData);
+        arcElement.setAttribute('d', pathData);
         
-        // Update text position
-        let midAngle = (startAngle + endAngle) / 2;
-        if (endAngle < startAngle) {
-            midAngle = startAngle + angleDiff / 2;
-        }
+        // ✅ REFACTORED: Use the helper method to get updated text position
+        const textPosition = this.createAngleText(angleData, textElement);
         
-        const textRadius = radius + 20;
-        const textX = vertex.x + textRadius * Math.cos(midAngle);
-        const textY = vertex.y + textRadius * Math.sin(midAngle);
-        
-        angleData.textElement.setAttribute('x', textX);
-        angleData.textElement.setAttribute('y', textY);
+        textElement.setAttribute('x', textPosition.x);
+        textElement.setAttribute('y', textPosition.y);
     }
     
-    // Auto-create angles when edges are added
+    // Creates angles at each endpoint of an edge where the endpoint has 2+ neighbors.
+    // For each pair of neighbors, checks if they're collinear (skips if so) and if angle exists.
+    // Sorts angle pairs by size (largest first) so smaller angles render on top.
+    // Creates all valid angles using createAngle().
     autoCreateAnglesForEdge = (edgePointIds) => {
-        debugLogger.log('GeometryTool.autoCreateAnglesForEdge', { edgePointIds });
+        debugLogger.log('Creator.autoCreateAnglesForEdge', { edgePointIds });
         
         // For each point in the edge, check if it now has 2+ neighbors
         edgePointIds.forEach(pointId => {
@@ -1815,7 +1754,7 @@ class GeometryTool {
             if (!point) return;
             
             // Find all neighbors of this point
-            const neighbors = this.findNeighbors(point);
+            const neighbors = findPointNeighbors(point, this.edges, this.pointsMap);
             
             if (neighbors.length < 2) return; // Need at least 2 neighbors for an angle
             
@@ -1837,11 +1776,7 @@ class GeometryTool {
                     }
                     
                     // Check if angle already exists
-                    const angleExists = this.angles.some(a => 
-                        a.point === point.id &&
-                        ((a.neighborPoints[0] === neighbor1.id && a.neighborPoints[1] === neighbor2.id) ||
-                         (a.neighborPoints[0] === neighbor2.id && a.neighborPoints[1] === neighbor1.id))
-                    );
+                    const angleExists = this.angles.some(a => isThisAngle(a, point.id, neighbor1.id, neighbor2.id));
                     
                     if (!angleExists) {
                         // Calculate angle size for sorting
@@ -1874,63 +1809,99 @@ class GeometryTool {
     }
     
     
-    // Trigger angle solving using geometric theorems
+    // Runs the angle solver to calculate unknown angle values using geometric theorems.
+    // Uses triangle sum (180°), supplementary angles, and inscribed angle theorems.
+    // Updates angle displays and logs results to console and debug panel.
+    // Emits ANGLE_SOLVE_COMPLETED event when finished.
     solveAngles = () => {
-        debugLogger.log('GeometryTool.solveAngles', {
+        debugLogger.log('Creator.solveAngles', {
             totalAngles: this.angles.length,
             unknownAngles: this.angles.filter(a => !a.value || a.value === '?').length
         });
         
-        // Send all necessary data to the solver
-        this.messagingHub.emit(Messages.ANGLE_SOLVE_REQUESTED, {
-            adjacentPoints: this.adjacentPoints,
-            circles: this.circles,
-            edges: this.edges,
-            points: this.points,
-            lines: this.lines,
-            pointsMap: this.pointsMap,
-            angles: this.angles,
-            triangles: this.triangles
-        });
+        try {
+            const { angles } = this;
+
+            debugLogger.log('Creator.solveAngles', { 
+                totalAngles: angles.length,
+                unknownAngles: angles.filter(a => !a.value || a.value === '?').length
+            });
+
+            const history = [];
+            const setAngleCallback = (angle, message, method) => {
+                history.push({ angle, message, method });
+                this.handleAngleValueCalculated(angle);
+            }
+
+            const { executionTime, solved, iterations } = solve({
+                angles: this.angles,
+                lines: this.lines,
+                points: this.points,
+                triangles: this.triangles,
+                circles: this.circles
+            }, {
+                setAngle: setAngleCallback,
+                maxIterations: 100
+            });
+
+            if (solved) {
+                const tableData = history.map((data) => ({ 
+                    angle: data.angle.name,
+                    value: data.angle.value,
+                    method: data.method,
+                    message: data.message
+                }));
+                console.table(tableData);
+            }
+            
+            // Log summary to debug panel
+            debugLogger.log('Creator.solveAngles', { 
+                iterations,
+                angles: `${solved}/${angles.length}`,
+                time: `${executionTime.toFixed(2)}ms`
+            });
+            
+            console.info('angle:solveCompleted', {
+                iterations,
+                changesMade: solved,
+                executionTimeMs: executionTime
+            });
+        } catch (error) {
+            debugLogger.log('Creator.solveAngles.error', {
+                message: error.message,
+                stack: error.stack
+            });
+            console.info('angle:solveFailed', { error: error.message });
+        }
     }
-    
-    /**
-     * Check if the current geometry problem can be solved
-     * Calls AngleSolver.canBeSolved() and displays result in debug panel
-     */
+
     checkSolvability = () => {
         // Skip if no angles exist yet
         if (this.angles.length === 0) {
             return;
         }
-        
-        // Update solver data
-        this.angleSolver.updateData({
-            adjacentPoints: this.adjacentPoints,
-            circles: this.circles,
-            edges: this.edges,
-            points: this.points,
-            lines: this.lines,
-            pointsMap: this.pointsMap,
+
+        // Create deep copies of data to avoid the solver modifying originals
+        const data = deepClone({
             angles: this.angles,
-            triangles: this.triangles
+            lines: this.lines,
+            points: this.points,
+            triangles: this.triangles.map(tri => Array.from(tri)),
+            circles: this.circles
         });
-        
-        // Check solvability
-        const result = this.angleSolver.canBeSolved();
-        
-        // Send result to debug panel via messaging hub
-        debugLogger.log('Solvability Check', {
-            status: result.solvable ? '✓ Solvable' : '✗ Not solvable',
-            reason: result.reason,
-            progress: `${result.details.solvedAngles}/${result.details.totalAngles} angles`
+        const { executionTime, solved } = solve(data, {
+            setAngle: () => { },
+            maxIterations: 100
         });
+
+        this.ui.toolbar.updateFeedback(solved);
+        console.info(`Can be solved: ${solved} (${executionTime.toFixed(2)}ms)`, this.triangles);
     }
     
     createAngleBisector = (angleData) => {
         
         // Look up the point object from ID
-        const point = this.pointsMap.get(angleData.point);
+        const point = this.pointsMap.get(angleData.pointId);
         if (!point) {
             this.updateStatus('Cannot create bisector: point not found');
             return;
@@ -1942,14 +1913,14 @@ class GeometryTool {
         
         // Use the specific two neighbor points from the angleData (not all neighbors)
         // This ensures we bisect the correct angle when a point has more than 2 neighbors
-        if (!angleData.neighborPoints || angleData.neighborPoints.length !== 2) {
+        if (!angleData.sidepoints || angleData.sidepoints.length !== 2) {
             this.updateStatus('Cannot create bisector: angle data is incomplete');
             return;
         }
         
         // Look up neighbor point objects
-        const neighbor1 = this.pointsMap.get(angleData.neighborPoints[0]);
-        const neighbor2 = this.pointsMap.get(angleData.neighborPoints[1]);
+        const neighbor1 = this.pointsMap.get(angleData.sidepoints[0]);
+        const neighbor2 = this.pointsMap.get(angleData.sidepoints[1]);
         
         if (!neighbor1 || !neighbor2) {
             this.updateStatus('Cannot create bisector: neighbor points not found');
@@ -1973,9 +1944,9 @@ class GeometryTool {
         this.bisectedAngles.add(angleKey);
         
         // Ensure the angle has visual elements (create them if they don't exist)
-        if (!angleData.arcElement || !angleData.textElement) {
+        if (!angleData.groupElement) {
             // Create the angle visualization first
-            this.drawAngle(point, neighbor1, neighbor2, angleData.radius || 30);
+            this.createAngle(point, neighbor1, neighbor2)
             
             // Find the newly created angle data (it was just added to this.angles)
             const newAngleData = this.angles[this.angles.length - 1];
@@ -2094,7 +2065,7 @@ class GeometryTool {
                 }
             } else {
                 // Create new line with all three collinear points
-                this.lines.push([intersectedEdge.point1.id, newPoint.id, intersectedEdge.point2.id]);
+                this.addLine([intersectedEdge.point1.id, newPoint.id, intersectedEdge.point2.id]);
             }
             
             // Remove the old edge that was intersected
@@ -2119,8 +2090,7 @@ class GeometryTool {
             
             this.edges.push({
                 points: [intersectedEdge.point1.id, newPoint.id],
-                element: edge1Line,
-                notes: ''
+                element: edge1Line
             });
             
             // Update adjacency map for edge1
@@ -2138,8 +2108,7 @@ class GeometryTool {
             
             this.edges.push({
                 points: [newPoint.id, intersectedEdge.point2.id],
-                element: edge2Line,
-                notes: ''
+                element: edge2Line
             });
             
             // Update adjacency map for edge2
@@ -2161,8 +2130,7 @@ class GeometryTool {
             
             this.edges.push({
                 points: [point.id, newPoint.id],
-                element: bisectorEdgeLine,
-                notes: ''
+                element: bisectorEdgeLine
             });
             
             // Update adjacency map for bisector edge
@@ -2209,11 +2177,11 @@ class GeometryTool {
             
             // Find the two newly created angles and set their labels and values
             const newAngles = this.angles.filter(a => 
-                a.point === point.id && (
-                    (a.neighborPoints[0] === neighbors[0].id && a.neighborPoints[1] === newPoint.id) ||
-                    (a.neighborPoints[0] === newPoint.id && a.neighborPoints[1] === neighbors[0].id) ||
-                    (a.neighborPoints[0] === neighbors[1].id && a.neighborPoints[1] === newPoint.id) ||
-                    (a.neighborPoints[0] === newPoint.id && a.neighborPoints[1] === neighbors[1].id)
+                a.pointId === point.id && (
+                    (a.sidepoints[0] === neighbors[0].id && a.sidepoints[1] === newPoint.id) ||
+                    (a.sidepoints[0] === newPoint.id && a.sidepoints[1] === neighbors[0].id) ||
+                    (a.sidepoints[0] === neighbors[1].id && a.sidepoints[1] === newPoint.id) ||
+                    (a.sidepoints[0] === newPoint.id && a.sidepoints[1] === neighbors[1].id)
                 )
             );
             
@@ -2227,7 +2195,12 @@ class GeometryTool {
                 }
                 
                 // Update text display (shows label if no value)
-                angle.textElement.textContent = this.getAngleDisplayText(angle);
+                if (angle.groupElement) {
+                    const textEl = angle.groupElement.querySelector('text');
+                    if (textEl) {
+                        textEl.textContent = getAngleDisplayText(angle);
+                    }
+                }
             });
             
             // Create angles at the new intersection point
@@ -2235,27 +2208,13 @@ class GeometryTool {
             // Use autoCreateAnglesForEdge to ensure all angles are created correctly
             
             // Create angles for the bisector edge (A-D)
-            console.log(`Creating angles for bisector edge: ${point.id}-${newPoint.id}`);
             this.autoCreateAnglesForEdge([point.id, newPoint.id]);
             
             // Create angles for the first segment of split edge (B-D)
-            console.log(`Creating angles for split edge segment 1: ${intersectedEdge.point1.id}-${newPoint.id}`);
             this.autoCreateAnglesForEdge([intersectedEdge.point1.id, newPoint.id]);
             
             // Create angles for the second segment of split edge (D-C)
-            console.log(`Creating angles for split edge segment 2: ${intersectedEdge.point2.id}-${newPoint.id}`);
             this.autoCreateAnglesForEdge([intersectedEdge.point2.id, newPoint.id]);
-            
-            // Log all angles at the new point D
-            const anglesAtD = this.angles.filter(a => a.point === newPoint.id);
-            console.log(`Angles at point ${newPoint.id}:`, anglesAtD.map(a => ({
-                name: a.name,
-                neighbors: a.neighborPoints,
-                isHidden: a.isHidden,
-                value: a.calculatedValue
-            })));
-            
-            console.log(`Angle bisector: created angles for all edges meeting at intersection point ${newPoint.id}`);
             
             // Update triangles (will detect the newly created triangles)
             this.updateTriangles();
@@ -2292,11 +2251,13 @@ class GeometryTool {
         this.saveState();
     }
     
-    // lineIntersection - removed, using mathHelper.lineIntersection
-    // getUnusedGreekLetter - removed, using mathHelper.getUnusedGreekLetter
-    // clipLineToCanvas - removed, using mathHelper.clipLineToCanvas
+    // Note: lineIntersection, getUnusedGreekLetter, and clipLineToCanvas
+    // have been moved to mathHelper.mjs and are imported from there.
     
+    // Delegates to historyManager to save the current state for undo/redo.
     saveState = () => {
+        this.checkSolvability();
+        this.updateJsonPanel();
         return this.historyManager.saveState();
     }
     
@@ -2312,9 +2273,13 @@ class GeometryTool {
         // Clear current SVG content
         this.ui.canvas.svg.innerHTML = '<defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><polygon points="0 0, 10 3, 0 6" fill="#666" /></marker></defs>';
         
-        // Restore data
-        this.points = JSON.parse(JSON.stringify(state.points));
-        this.bisectedAngles = new Set(state.bisectedAngles);
+        // Restore data - round coordinates to prevent decimal values
+        this.points = state.points.map(p => ({
+            ...p,
+            x: Math.round(p.x),
+            y: Math.round(p.y)
+        }));
+        // Don't restore bisectedAngles yet - wait until after angles are created
         this.linkedAngles = new Map(state.linkedAngles);
         
         // Rebuild pointsMap for O(1) lookups
@@ -2350,8 +2315,10 @@ class GeometryTool {
             const point2 = this.pointsMap.get(pointIds[1]);
             
             if (point1 && point2) {
+                const classes = ['line'];
+                if (edgeData.hide) classes.push('hide');
                 const line = createElement('line', {
-                    class: 'line',
+                    class: classes,
                     x1: point1.x,
                     y1: point1.y,
                     x2: point2.x,
@@ -2359,13 +2326,12 @@ class GeometryTool {
                 });
                 this.ui.canvas.svg.insertBefore(line, this.ui.canvas.svg.firstChild);
                 
-                const edgeObj = {
+                const edge = {
                     points: [pointIds[0], pointIds[1]],
-                    element: line,
-                    notes: edgeData.notes || ''
+                    element: line
                 };
-                
-                this.edges.push(edgeObj);
+                if (edgeData.hide) edge.hide = true;
+                this.edges.push(edge);
                 
                 // Rebuild adjacentPoints map
                 this.addAdjacentPoint(pointIds[0], pointIds[1]);
@@ -2376,21 +2342,26 @@ class GeometryTool {
         // Restore circles
         this.circles = [];
         state.circles.forEach(circleData => {
-            // Support multiple formats: new (centerPoint/pointsOnLine), points array, or old (point1/point2)
+            // Support multiple formats for backward compatibility
             let centerPointId, pointsOnLine;
             
             if (circleData.centerPoint !== undefined) {
                 // New format
                 centerPointId = circleData.centerPoint;
                 pointsOnLine = circleData.pointsOnLine || [];
-            } else if (circleData.points) {
-                // Points array format
-                centerPointId = circleData.points[0];
-                pointsOnLine = [circleData.points[1]];
-            } else {
-                // Old format
+            } else if (circleData.centerPointId) {
+                // Old format with centerPointId/radiusPointId
+                centerPointId = circleData.centerPointId;
+                pointsOnLine = circleData.radiusPointId ? [circleData.radiusPointId] : [];
+            } else if (circleData.point1) {
+                // Very old format with point1/point2
                 centerPointId = circleData.point1;
-                pointsOnLine = [circleData.point2];
+                pointsOnLine = circleData.point2 ? [circleData.point2] : [];
+            }
+            
+            // Also include old 'points' array if it exists
+            if (circleData.points && Array.isArray(circleData.points)) {
+                pointsOnLine = [...new Set([...pointsOnLine, ...circleData.points])];
             }
             
             const centerPoint = this.pointsMap.get(centerPointId);
@@ -2399,69 +2370,96 @@ class GeometryTool {
             const validPointsOnLine = pointsOnLine.filter(id => this.pointsMap.get(id));
             
             if (centerPoint) {
+                const classes = ['circle-shape'];
+                if (circleData.hide) classes.push('hide');
                 const circle = createElement('circle', {
-                    class: 'circle-shape',
-                    cx: circleData.centerX,
-                    cy: circleData.centerY,
-                    r: circleData.radius
+                    class: classes,
+                    cx: Math.round(circleData.centerX),
+                    cy: Math.round(circleData.centerY),
+                    r: Math.round(circleData.radius)
                 });
                 this.ui.canvas.svg.appendChild(circle);
                 
-                this.circles.push({
-                    centerX: circleData.centerX,
-                    centerY: circleData.centerY,
-                    radius: circleData.radius,
+                const circleObj = {
+                    name: circleData.name || `Circle_${centerPoint.id}`,
                     centerPoint: centerPointId,
+                    centerX: Math.round(circleData.centerX),
+                    centerY: Math.round(circleData.centerY),
+                    radius: Math.round(circleData.radius),
                     pointsOnLine: validPointsOnLine
-                });
+                };
+                if (circleData.hide) circleObj.hide = true;
+                this.circles.push(circleObj);
             }
         });
         
-        // Restore angles - manually recreate only the angles that existed in the saved state
+        // Restore angles
+        // First, remove all existing angle DOM elements
+        this.angles.forEach(angle => {
+            if (angle.groupElement) {
+                angle.groupElement.remove();
+            }
+        });
+        
+        // Clear bisectedAngles temporarily to allow all angles to be recreated
+        this.bisectedAngles = new Set();
         this.angles = [];
+        
+        // Recreate ALL possible angles based on current geometry
+        // This ensures all angles are created, not just those in the saved state
+        this.recreateAllAngles();
+        
+        // Now apply saved angle properties (value, label, radius, hide) to the recreated angles
         state.angles.forEach(angleData => {
-            const vertex = this.pointsMap.get(angleData.pointId);
-            const point1 = angleData.sidePoints && angleData.sidePoints[0] ? 
-                this.pointsMap.get(angleData.sidePoints[0]) : null;
-            const point2 = angleData.sidePoints && angleData.sidePoints[1] ? 
-                this.pointsMap.get(angleData.sidePoints[1]) : null;
+            const angle = this.angles.find(a => 
+                isThisAngle(a, angleData.pointId, angleData.sidepoints[0], angleData.sidepoints[1])
+            );
             
-            if (vertex && point1 && point2) {
-                // Recreate the angle
-                this.createAngle(vertex, point1, point2);
-                
-                // Find the newly created angle and restore its value and notes
-                const angle = this.angles.find(a => {
-                    if (a.point !== angleData.pointId) return false;
-                    if (!a.neighborPoints || a.neighborPoints.length !== 2) return false;
-                    const sidePointsSet = new Set(angleData.sidePoints);
-                    return sidePointsSet.has(a.neighborPoints[0]) && sidePointsSet.has(a.neighborPoints[1]);
-                });
-                
-                if (angle) {
-                    if (angleData.value) {
-                        angle.value = angleData.value;
-                        angle.textElement.textContent = angleData.value + '°';
+            if (angle) {
+                if (angleData.value) {
+                    angle.value = angleData.value;
+                    if (angle.groupElement) {
+                        const textEl = angle.groupElement.querySelector('text');
+                        if (textEl) {
+                            textEl.textContent = angleData.value + '°';
+                        }
                     }
-                    if (angleData.id) {
-                        angle.id = angleData.id;
-                    }
-                    if (angleData.radius) {
-                        angle.radius = angleData.radius;
-                        // Note: Arc is already drawn with correct radius during angle creation
-                    }
-                    if (angleData.notes) {
-                        angle.notes = angleData.notes;
+                }
+                if (angleData.name) {
+                    angle.name = angleData.name;
+                }
+                if (angleData.label !== undefined) {
+                    angle.label = angleData.label;
+                }
+                if (angleData.radius) {
+                    angle.radius = angleData.radius;
+                    // Redraw the arc with the new radius
+                    this.redrawAngleArc(angle);
+                }
+                // Handle hide property
+                if (angleData.hide) {
+                    angle.hide = true;
+                    if (angle.groupElement) {
+                        angle.groupElement.classList.add('hide');
                     }
                 }
             }
         });
         
+        // Now restore bisectedAngles after all angles are created
+        this.bisectedAngles = new Set(state.bisectedAngles);
+
+        // Restore lines
+        this.lines = state.lines ? deepClone(state.lines) : [];
+
+        // Restore definitions
+        this.definitions = state.definitions ? deepClone(state.definitions) : [];
+        
         this.selectedPoints = [];
         this._batchUpdatingTriangles = false; // Re-enable triangle updates
         this.updateTriangles(); // Update triangles once after all edges are restored
-        this.updateUndoRedoButtons();
-        this.updateJsonPanel();
+        this.updateDefinitionsPanel();
+        this.saveState();
     }
     
     updateUndoRedoButtons = () => {
@@ -2496,11 +2494,13 @@ class GeometryTool {
             this.circles = [];
             this.edges = [];
             this.angles = [];
+            this.lines = [];
             this.selectedPoints = [];
             this.triangles = [];
             this.adjacentPoints.clear();
             this.bisectedAngles.clear();
             this.linkedAngles.clear();
+
             this.history = [];
             this.historyIndex = -1;
             this.updateStatus('Canvas cleared. Click to add points.');
@@ -2533,12 +2533,6 @@ class GeometryTool {
     updateStatus = (message) => {
         this.messagingHub.emit(Messages.STATUS_UPDATE, message);
     }
-
-    updateNotesPanel = () => {
-        this.ui.panels.getPanel('notes').updateNotes(this.points, this.angles);
-    }
-
-    // escapeHtml moved to domHelper.mjs and imported
 
     checkPointOnCircles = (point) => {
         // Check if the point is on any circle's border (within 5 pixels threshold)
@@ -2587,7 +2581,6 @@ class GeometryTool {
 
         this.definitions.push(definition);
         this.updateDefinitionsPanel();
-        this.updateJsonPanel();
         this.saveState();
         this.updateStatus('✓ Definition added');
     }
@@ -2597,7 +2590,6 @@ class GeometryTool {
         if (index !== -1) {
             this.definitions.splice(index, 1);
             this.updateDefinitionsPanel();
-            this.updateJsonPanel();
             this.saveState();
             this.updateStatus('✓ Definition deleted');
         }
@@ -2613,7 +2605,6 @@ class GeometryTool {
         if (definition) {
             definition.text = newText.trim();
             this.updateDefinitionsPanel();
-            this.updateJsonPanel();
             this.saveState();
             this.updateStatus('✓ Definition updated');
             return true;
@@ -2634,8 +2625,11 @@ class GeometryTool {
         if (label !== undefined) {
             angleData.label = label;
             // Update text display when label changes
-            if (angleData.textElement) {
-                angleData.textElement.textContent = this.getAngleDisplayText(angleData);
+            if (angleData.groupElement) {
+                const textEl = angleData.groupElement.querySelector('text');
+                if (textEl) {
+                    textEl.textContent = getAngleDisplayText(angleData);
+                }
             }
             
             // Propagate label to overlapping angles (angles that represent the same geometric angle)
@@ -2647,8 +2641,11 @@ class GeometryTool {
                         if (overlapAngle) {
                             overlapAngle.label = label;
                             // Update text display for overlapping angle
-                            if (overlapAngle.textElement) {
-                                overlapAngle.textElement.textContent = this.getAngleDisplayText(overlapAngle);
+                            if (overlapAngle.groupElement) {
+                                const textEl = overlapAngle.groupElement.querySelector('text');
+                                if (textEl) {
+                                    textEl.textContent = getAngleDisplayText(overlapAngle);
+                                }
                             }
                         }
                     }
@@ -2662,12 +2659,12 @@ class GeometryTool {
             angleData.value = value;
             
             // Update text element if it exists (won't exist for hidden overlapping angles)
-            if (angleData.textElement) {
-                angleData.textElement.textContent = this.getAngleDisplayText(angleData);
-            }
-            
-            // Redraw the arc in case it needs to change from arc to square corner (or vice versa)
-            if (angleData.arcElement) {
+            if (angleData.groupElement) {
+                const textEl = angleData.groupElement.querySelector('text');
+                if (textEl) {
+                    textEl.textContent = getAngleDisplayText(angleData);
+                }
+                // Redraw the arc in case it needs to change from arc to square corner (or vice versa)
                 this.redrawAngleArc(angleData);
             }
             
@@ -2680,10 +2677,11 @@ class GeometryTool {
                         if (overlapAngle) {
                             overlapAngle.value = value;
                             // Update text/arc only if they exist (for visible angles)
-                            if (overlapAngle.textElement) {
-                                overlapAngle.textElement.textContent = this.getAngleDisplayText(overlapAngle);
-                            }
-                            if (overlapAngle.arcElement) {
+                            if (overlapAngle.groupElement) {
+                                const textEl = overlapAngle.groupElement.querySelector('text');
+                                if (textEl) {
+                                    textEl.textContent = getAngleDisplayText(overlapAngle);
+                                }
                                 this.redrawAngleArc(overlapAngle);
                             }
                         }
@@ -2693,17 +2691,17 @@ class GeometryTool {
             }
             
             // Check if this angle has a linked angle (from bisection)
-            if (this.linkedAngles && angleData.neighborPoints) {
-                const neighborIds = [...angleData.neighborPoints].sort((a, b) => a.localeCompare(b));
-                const angleKey = `${angleData.point}-${neighborIds[0]}-${neighborIds[1]}`;
+            if (this.linkedAngles && angleData.sidepoints) {
+                const neighborIds = [...angleData.sidepoints].sort((a, b) => a.localeCompare(b));
+                const angleKey = `${angleData.pointId}-${neighborIds[0]}-${neighborIds[1]}`;
                 
                 const linkedAngleKey = this.linkedAngles.get(angleKey);
                 
                 if (linkedAngleKey) {
                     const linkedAngle = this.angles.find(a => {
-                        if (a.neighborPoints) {
-                            const linkedNeighborIds = [...a.neighborPoints].sort((a, b) => a.localeCompare(b));
-                            const key = `${a.point}-${linkedNeighborIds[0]}-${linkedNeighborIds[1]}`;
+                        if (a.sidepoints) {
+                            const linkedNeighborIds = [...a.sidepoints].sort((a, b) => a.localeCompare(b));
+                            const key = `${a.pointId}-${linkedNeighborIds[0]}-${linkedNeighborIds[1]}`;
                             return key === linkedAngleKey;
                         }
                         return false;
@@ -2711,11 +2709,12 @@ class GeometryTool {
                     
                     if (linkedAngle) {
                         linkedAngle.value = value;
-                        if (linkedAngle.textElement) {
-                            linkedAngle.textElement.textContent = this.getAngleDisplayText(linkedAngle);
-                        }
-                        // Also redraw the linked angle
-                        if (linkedAngle.arcElement) {
+                        if (linkedAngle.groupElement) {
+                            const textEl = linkedAngle.groupElement.querySelector('text');
+                            if (textEl) {
+                                textEl.textContent = getAngleDisplayText(linkedAngle);
+                            }
+                            // Also redraw the linked angle
                             this.redrawAngleArc(linkedAngle);
                         }
                         linkedUpdated = true;
@@ -2724,11 +2723,12 @@ class GeometryTool {
             }
         } else {
             angleData.value = null;
-            if (angleData.textElement) {
-                angleData.textElement.textContent = this.getAngleDisplayText(angleData);
-            }
-            // Redraw in case it was a 90-degree angle that should no longer be a square
-            if (angleData.arcElement) {
+            if (angleData.groupElement) {
+                const textEl = angleData.groupElement.querySelector('text');
+                if (textEl) {
+                    textEl.textContent = getAngleDisplayText(angleData);
+                }
+                // Redraw in case it was a 90-degree angle that should no longer be a square
                 this.redrawAngleArc(angleData);
             }
             
@@ -2740,10 +2740,11 @@ class GeometryTool {
                         const overlapAngle = this.angles.find(a => a.id === overlapId);
                         if (overlapAngle) {
                             overlapAngle.value = null;
-                            if (overlapAngle.textElement) {
-                                overlapAngle.textElement.textContent = this.getAngleDisplayText(overlapAngle);
-                            }
-                            if (overlapAngle.arcElement) {
+                            if (overlapAngle.groupElement) {
+                                const textEl = overlapAngle.groupElement.querySelector('text');
+                                if (textEl) {
+                                    textEl.textContent = getAngleDisplayText(overlapAngle);
+                                }
                                 this.redrawAngleArc(overlapAngle);
                             }
                         }
@@ -2764,12 +2765,7 @@ class GeometryTool {
             this.updateStatus('Angle value updated');
         }
         
-        this.checkSolvability();
         this.saveState();
-    }
-
-    updateDefinitionsPanel = () => {
-        this.ui.panels.getPanel('definitions').updateDefinitions(this.definitions);
     }
 
     updateJsonPanel = () => {
@@ -2777,34 +2773,47 @@ class GeometryTool {
         
         // Create serializable data (without DOM elements)
         const data = {
-            points: this.points.map(point => ({
-                id: point.id,
-                x: point.x,
-                y: point.y,
-                notes: point.notes || ''
-            })),
-            edges: this.edges.map(edge => ({
-                points: edge.points || [],
-                notes: edge.notes || ''
-            })),
-            angles: this.angles.map(angle => ({
-                name: angle.name || '',
-                pointId: angle.point,
-                sidepoints: angle.neighborPoints || [],
-                value: angle.value,
-                calculatedValue: angle.calculatedValue,
-                label: angle.label || '',
-                radius: angle.radius || 30,
-                notes: angle.notes || ''
-            })),
-            circles: this.circles.map(circle => ({
-                name: circle.id,
-                centerPoint: circle.centerPoint,
-                centerX: circle.centerX,
-                centerY: circle.centerY,
-                radius: circle.radius,
-                pointsOnLine: circle.pointsOnLine || []
-            })),
+            points: this.points.map(point => {
+                const p = {
+                    id: point.id,
+                    x: Math.round(point.x),
+                    y: Math.round(point.y)
+                };
+                if (point.hide) p.hide = true;
+                return p;
+            }),
+            edges: this.edges.map(edge => {
+                const e = {
+                    points: edge.points || []
+                };
+                if (edge.hide) e.hide = true;
+                return e;
+            }),
+            angles: this.angles.map(angle => {
+                const a = {
+                    name: angle.name || '',
+                    pointId: angle.pointId,
+                    sidepoints: angle.sidepoints || [],
+                    value: angle.value,
+                    calculatedValue: angle.calculatedValue,
+                    label: angle.label || '',
+                    radius: angle.radius || 30
+                };
+                if (angle.hide) a.hide = true;
+                return a;
+            }),
+            circles: this.circles.map(circle => {
+                const c = {
+                    name: circle.id,
+                    centerPoint: circle.centerPoint,
+                    centerX: Math.round(circle.centerX),
+                    centerY: Math.round(circle.centerY),
+                    radius: Math.round(circle.radius),
+                    pointsOnLine: circle.pointsOnLine || []
+                };
+                if (circle.hide) c.hide = true;
+                return c;
+            }),
             triangles: this.triangles.map(triangle => Array.from(triangle).sort()),
             lines: this.lines,
             definitions: this.definitions,
@@ -2855,214 +2864,83 @@ class GeometryTool {
         
         // Clear current state
         this.ui.canvas.svg.innerHTML = '<defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><polygon points="0 0, 10 3, 0 6" fill="#666" /></marker></defs>';
-        this.points = [];
-        this.circles = [];
-        this.edges = [];
+        const {
+            adjacentPoints,
+            angles,
+            circles,
+            definitions,
+            edges,
+            lines,
+            points,
+            pointsMap,
+            overlappingAngles,
+            triangles
+        } = enrichGeometryData(data);
+
+
+        this.definitions = definitions;
+        this.adjacentPoints = adjacentPoints;
+        this.points = points;
+        this.circles = circles;
+        this.edges = edges;
         this.angles = [];
         this.lines = [];
         this.selectedPoints = [];
         this.bisectedAngles.clear();
         this.linkedAngles.clear();
-        this.overlappingAngles.clear();
-   
-        // Restore points
-        if (data.points) {
-            data.points.forEach(pointData => {
-                const point = {
-                    id: pointData.id,
-                    x: pointData.x,
-                    y: pointData.y,
-                    notes: pointData.notes || ''
-                };
-                this.addPoint(point);
-                this.drawPoint(point);
-            });
-        }
+        this.overlappingAngles = overlappingAngles;
+        this.triangles = triangles;
+        this.overlappingAngles = overlappingAngles;
+        this.pointsMap = pointsMap;
+        // add lines
+        lines.forEach(linePoints => {
+            this.addLine(linePoints);
+        });
+
+        // Draw points
+        this.points.forEach(point => {
+            this.drawPoint(point);
+        });
         
-        // Restore edges
-        this.adjacentPoints.clear(); // Clear adjacency map before rebuilding
-        if (data.edges) {
-            data.edges.forEach(edgeData => {
-                const pointIds = edgeData.points;
-                const point1 = this.pointsMap.get(pointIds[0]);
-                const point2 = this.pointsMap.get(pointIds[1]);
-                
-                if (point1 && point2) {
-                    const line = createElement('line', {
-                        class: 'line',
-                        x1: point1.x,
-                        y1: point1.y,
-                        x2: point2.x,
-                        y2: point2.y
-                    });
-                    this.ui.canvas.svg.insertBefore(line, this.ui.canvas.svg.firstChild);
-                    
-                    this.edges.push({
-                        points: [pointIds[0], pointIds[1]],
-                        element: line,
-                        notes: edgeData.notes || ''
-                    });
-                    
-                    // Rebuild adjacentPoints map
-                    this.addAdjacentPoint(pointIds[0], pointIds[1]);
-                    this.addAdjacentPoint(pointIds[1], pointIds[0]);
-                }
+        // draw edges
+        this.edges.forEach(edge => {
+            const pointIds = edge.points;
+            const point1 = this.pointsMap.get(pointIds[0]);
+            const point2 = this.pointsMap.get(pointIds[1]);
+            // Rebuild adjacentPoints map
+            const classes = ['line'];
+            if (edge.hide) classes.push('hide');
+            const line = createElement('line', {
+                class: classes,
+                x1: point1.x,
+                y1: point1.y,
+                x2: point2.x,
+                y2: point2.y
             });
-        }
-        
-        console.log('✅ Built adjacency map with', this.adjacentPoints.size, 'points');
+            this.ui.canvas.svg.insertBefore(line, this.ui.canvas.svg.firstChild);
+            edge.element = line;
+        });
         
         // Restore circles
-        if (data.circles) {
-            data.circles.forEach(circleData => {
-                const centerPointId = circleData.centerPoint;
-                const pointsOnLine = circleData.pointsOnLine || [];
-                const centerPoint = this.pointsMap.get(centerPointId);
-                
-                // Validate that all points on line exist
-                const validPointsOnLine = pointsOnLine.filter(id => this.pointsMap.get(id));
-                
-                if (centerPoint) {
-                    // Draw circle
-                    const circle = createElement('circle', {
-                        class: 'circle-shape',
-                        cx: circleData.centerX,
-                        cy: circleData.centerY,
-                        r: circleData.radius
-                    });
-                    this.ui.canvas.svg.appendChild(circle);
-                    
-                    this.circles.push({
-                        name: circleData.id || `Circle_${centerPoint.id}`,
-                        centerPoint: centerPointId,
-                        centerX: circleData.centerX,
-                        centerY: circleData.centerY,
-                        radius: circleData.radius,
-                        pointsOnLine: validPointsOnLine
-                    });
-                }
+        this.circles.forEach(circle => {
+            // Draw circle
+            const classes = ['circle-shape'];
+            if (circle.hide) classes.push('hide');
+            const circleElement = createElement('circle', {
+                class: classes,
+                cx: circle.centerX,
+                cy: circle.centerY,
+                r: circle.radius
             });
-        }
-        
-        // Restore angles - manually recreate only the angles that existed in the saved data
-        this.angles = [];
-        if (data.angles) {
-            data.angles.forEach(angleData => {
-                const vertexId = angleData.pointId;
-                const vertex = this.pointsMap.get(vertexId);
-                const point1 = this.pointsMap.get(angleData.sidepoints[0]);
-                const point2 = this.pointsMap.get(angleData.sidepoints[1]);
-                
-                if (vertex && point1 && point2) {
-                    // Recreate the angle
-                    this.createAngle(vertex, point1, point2);
-                    
-                    // Find the newly created angle and restore its value
-                    const angle = this.angles.find(a => {
-                        if (a.point !== vertexId) return false;
-                        if (!a.neighborPoints || a.neighborPoints.length !== 2) return false;
-                        const point1Id = point1.id;
-                        const point2Id = point2.id;
-                        return (a.neighborPoints[0] === point1Id && a.neighborPoints[1] === point2Id) ||
-                               (a.neighborPoints[0] === point2Id && a.neighborPoints[1] === point1Id);
-                    });
-                    
-                if (angle) {
-                    if (angleData.value) {
-                        angle.value = angleData.value;
-                    }
-                    if (angleData.id) {
-                        angle.id = angleData.id;
-                    }
-                    if (angleData.label !== undefined) {
-                        angle.label = angleData.label;
-                    }
-                    // Update text display after all properties are set
-                    angle.textElement.textContent = this.getAngleDisplayText(angle);
-                        if (angleData.radius) {
-                            angle.radius = angleData.radius;
-                            // Note: Arc is already drawn with correct radius during angle creation
-                        }
-                        if (angleData.notes) {
-                            angle.notes = angleData.notes;
-                        }
-                    }
-                }
-            });
-        }
-
-        // Restore lines
-        if (data.lines) {
-            this.lines = JSON.parse(JSON.stringify(data.lines));
-        }
-        
-        // Restore or rebuild triangles
-        if (data.triangles && Array.isArray(data.triangles)) {
-            // Load triangles from saved data
-            this.triangles = data.triangles.map(triangleArray => new Set(triangleArray));
-            console.log('✅ Loaded triangles from saved data:', this.triangles.length);
-        } else {
-            // No triangles in saved data, rebuild them
-            console.log('⚠️ No triangles in saved data, rebuilding...');
-            this.triangles = [];
-            this.updateTriangles();
-            console.log('✅ Built triangles:', this.triangles.length);
-        }
-        
-        // Auto-create any missing angles at vertices with multiple edges
-        console.log('🔍 Checking for missing angles...');
-        let anglesCreated = 0;
-        this.points.forEach(point => {
-            const neighbors = this.findNeighbors(point);
-            if (neighbors.length >= 2) {
-                // Check all pairs of neighbors
-                for (let i = 0; i < neighbors.length; i++) {
-                    for (let j = i + 1; j < neighbors.length; j++) {
-                        const neighbor1 = neighbors[i];
-                        const neighbor2 = neighbors[j];
-                        
-                        // Check if angle already exists
-                        const angleExists = this.angles.some(a => 
-                            a.point === point.id &&
-                            a.neighborPoints &&
-                            ((a.neighborPoints[0] === neighbor1.id && a.neighborPoints[1] === neighbor2.id) ||
-                             (a.neighborPoints[0] === neighbor2.id && a.neighborPoints[1] === neighbor1.id))
-                        );
-                        
-                        if (!angleExists) {
-                            // Check if collinear (would be 180°, skip)
-                            const areCollinear = arePointsCollinear(point.id, neighbor1.id, neighbor2.id, this.lines);
-                            if (!areCollinear) {
-                                this.createAngle(point, neighbor1, neighbor2);
-                                anglesCreated++;
-                            }
-                        }
-                    }
-                }
-            }
+            this.ui.canvas.svg.appendChild(circleElement);
         });
-        console.log(`✅ Created ${anglesCreated} missing angles`);
-
-        // Rebuild overlappingAngles map
-        console.log('🔍 Rebuilding overlapping angles map...');
-        
-        // Build overlapping angles map using the utility function
-        // Filter out hidden angles before processing
-        const visibleAngles = this.angles.filter(angle => !angle.isHidden);
-        this.overlappingAngles = buildOverlappingAnglesMap(visibleAngles, this.lines, this.pointsMap);
-        
-        console.log(`✅ Rebuilt overlapping angles map with ${this.overlappingAngles.size} angle references`);
-
-        // Restore definitions
-        this.definitions = [];
-        if (data.definitions) {
-            this.definitions = data.definitions.map(defData => ({
-                id: defData.id,
-                text: defData.text,
-                timestamp: defData.timestamp
-            }));
-        }
-        
+     
+        // Restore angles - manually recreate only the angles that existed in the saved data
+        const orderedAngles = angles.slice().sort((a, b) => b.calculatedValue - a.calculatedValue);
+        orderedAngles.forEach(angleData => {
+            this.angles.push(angleData);
+            this.renderAngleArc(angleData);
+        });
         
         // Reset history and save the loaded state
         this.history = [];
@@ -3071,21 +2949,17 @@ class GeometryTool {
         
         // Update panels
         this.updateDefinitionsPanel();
-        this.updateNotesPanel();
-        this.updateJsonPanel();
     }
 
-    editEdge = (edgeObj) => {
-        // Attach point objects to edgeObj for Canvas use
-        const point1 = this.pointsMap.get(edgeObj.points[0]);
-        const point2 = this.pointsMap.get(edgeObj.points[1]);
-        edgeObj.point1 = point1;
-        edgeObj.point2 = point2;
-        this.messagingHub.emit(Messages.EDGE_EDIT_REQUESTED, edgeObj);
-    }
-    
     handlePointCreateRequest = (data) => {
-        const { fromPoint, distance, angle, newX, newY } = data;
+        const { fromPoint, distance: distanceValue, angle: angleValue, newX, newY } = data;
+        
+        // Validate fromPoint
+        if (!fromPoint || !fromPoint.id) {
+            console.error('handlePointCreateRequest: fromPoint is undefined or missing id', data);
+            this.updateStatus('❌ Error: Invalid source point');
+            return;
+        }
         
         // Create the new point
         const pointName = getNewPointName(this.points.length);
@@ -3116,111 +2990,61 @@ class GeometryTool {
         this.addAdjacentPoint(fromPoint.id, newPoint.id);
         this.addAdjacentPoint(newPoint.id, fromPoint.id);
         
-        // Check if the new point should be added to an existing line (collinear points)
+        // Check if the new point should be added to ANY existing lines (based on position)
+        // This handles multiple lines through the same point (e.g., vertical + horizontal)
+        this.checkPointOnLines(newPoint);
+        
+        // Check if we should CREATE a new line with adjacent points
         // Find if fromPoint is in any existing line
         const existingLine = this.lines.find(line => line.includes(fromPoint.id));
         
-        if (existingLine) {
-            // Check if newPoint already exists in the line
-            if (!existingLine.includes(newPoint.id)) {
-                // Determine where to insert the new point based on direction
-                const fromPointIndex = existingLine.indexOf(fromPoint.id);
+        // Only try to create new lines if newPoint wasn't added to fromPoint's line
+        let addedToExistingLine = existingLine && existingLine.includes(newPoint.id);
+        
+        // If not added to existing line, check if we should CREATE a new line
+        // This handles the case where fromPoint is in one line (e.g., vertical)
+        // but newPoint forms a different line (e.g., horizontal) with other adjacent points
+        if (!addedToExistingLine) {
+            const adjacentPointsSet = this.adjacentPoints.get(fromPoint.id) || new Set();
+            const adjacentPoints = Array.from(adjacentPointsSet);
+            
+            for (const adjacentId of adjacentPoints) {
+                if (adjacentId === newPoint.id) continue; // Skip the edge we just created
                 
-                // Calculate direction from fromPoint to newPoint
-                const newDx = newPoint.x - fromPoint.x;
-                const newDy = newPoint.y - fromPoint.y;
+                // Skip if this adjacent point is already in a line with fromPoint and newPoint
+                const alreadyInLine = this.lines.some(line => 
+                    line.includes(fromPoint.id) && line.includes(adjacentId) && line.includes(newPoint.id)
+                );
+                if (alreadyInLine) continue;
                 
-                // Check if fromPoint is at the start or end of the line
-                if (fromPointIndex === 0) {
-                    // fromPoint is at the start - check direction to next point
-                    const nextPointId = existingLine[1];
-                    const nextPoint = this.pointsMap.get(nextPointId);
-                    const nextDx = nextPoint.x - fromPoint.x;
-                    const nextDy = nextPoint.y - fromPoint.y;
+                const adjacentPoint = this.pointsMap.get(adjacentId);
+                if (!adjacentPoint) continue;
+                
+                // Check if fromPoint, newPoint, and adjacentPoint are collinear using existing helper
+                if (arePointsCollinearByPosition(fromPoint, newPoint, adjacentPoint, 1)) {
+                    // They're collinear! Create a new line with proper ordering
+                    const linePoints = [fromPoint, newPoint, adjacentPoint];
                     
-                    // Calculate dot product to check if same direction
-                    const dotProduct = dotProduct2D(newDx, newDy, nextDx, nextDy);
-                    
-                    if (dotProduct < 0) {
-                        // Opposite direction - insert newPoint BEFORE fromPoint
-                        existingLine.unshift(newPoint.id);
-                        console.log(`Inserted ${newPoint.id} at START (before ${fromPoint.id})`);
-                    } else {
-                        // Same direction - add after fromPoint and sort
-                        existingLine.push(newPoint.id);
-                        existingLine.sort((a, b) => {
-                            const aPoint = this.pointsMap.get(a);
-                            const bPoint = this.pointsMap.get(b);
-                            // Sort by x-coordinate (or y if vertical)
-                            if (Math.abs(aPoint.x - bPoint.x) > 1) {
-                                return aPoint.x - bPoint.x;
-                            }
-                            return aPoint.y - bPoint.y;
-                        });
-                        console.log(`Added ${newPoint.id} and sorted by position`);
-                    }
-                } else if (fromPointIndex === existingLine.length - 1) {
-                    // fromPoint is at the end - check direction to previous point
-                    const prevPointId = existingLine[fromPointIndex - 1];
-                    const prevPoint = this.pointsMap.get(prevPointId);
-                    const prevDx = prevPoint.x - fromPoint.x;
-                    const prevDy = prevPoint.y - fromPoint.y;
-                    
-                    // Calculate dot product to check if same direction
-                    const dotProduct = dotProduct2D(newDx, newDy, prevDx, prevDy);
-                    
-                    if (dotProduct < 0) {
-                        // Opposite direction - add newPoint AFTER fromPoint
-                        existingLine.push(newPoint.id);
-                        console.log(`Added ${newPoint.id} at END (after ${fromPoint.id})`);
-                    } else {
-                        // Same direction as previous - add and sort
-                        existingLine.push(newPoint.id);
-                        existingLine.sort((a, b) => {
-                            const aPoint = this.pointsMap.get(a);
-                            const bPoint = this.pointsMap.get(b);
-                            // Sort by x-coordinate (or y if vertical)
-                            if (Math.abs(aPoint.x - bPoint.x) > 1) {
-                                return aPoint.x - bPoint.x;
-                            }
-                            return aPoint.y - bPoint.y;
-                        });
-                        console.log(`Added ${newPoint.id} and sorted by position`);
-                    }
-                } else {
-                    // fromPoint is in the middle - just add and sort
-                    existingLine.push(newPoint.id);
-                    existingLine.sort((a, b) => {
-                        const aPoint = this.pointsMap.get(a);
-                        const bPoint = this.pointsMap.get(b);
-                        // Sort by x-coordinate (or y if vertical)
-                        if (Math.abs(aPoint.x - bPoint.x) > 1) {
-                            return aPoint.x - bPoint.x;
+                    // Sort by x-coordinate (or y if all x are same)
+                    linePoints.sort((a, b) => {
+                        if (Math.abs(a.x - b.x) > 1) {
+                            // Sort by x-coordinate
+                            return a.x - b.x;
+                        } else {
+                            // If x is same (vertical line), sort by y-coordinate
+                            return a.y - b.y;
                         }
-                        return aPoint.y - bPoint.y;
                     });
-                    console.log(`Added ${newPoint.id} (middle) and sorted by position`);
-                }
-            }
-        } else {
-            // Check if fromPoint has other neighbors that might form a line
-            const neighbors = this.findNeighbors(fromPoint);
-            if (neighbors.length >= 2) {
-                // Check if any neighbor forms a straight line with fromPoint and newPoint
-                for (const neighbor of neighbors) {
-                    if (neighbor.id === newPoint.id) continue;
                     
-                    // Check if these 3 points are collinear
-                    if (arePointsCollinearByPosition(fromPoint, neighbor, newPoint, 1)) {
-                        // Create new line with these three collinear points
-                        this.lines.push([neighbor.id, fromPoint.id, newPoint.id]);
-                        break;
-                    }
+                    const newLine = linePoints.map(p => p.id);
+                    this.addLine(newLine);
+                    break; // Only create one line per new point
                 }
             }
         }
         
-        // Check if the new point is on any circles
+        // Check if the new point should be added to any circles
+        // NOTE: This geometric check requires distance calculation (not angle calculation)
         const threshold = 5;
         this.circles.forEach(circle => {
             // Skip if the point is already tracked on this circle
@@ -3233,10 +3057,15 @@ class GeometryTool {
                 return;
             }
             
-            // Calculate distance from point to circle border
+            // Calculate distance from circle center to new point
+            const centerPoint = this.pointsMap.get(circle.centerPoint);
+            if (!centerPoint) {
+                return;
+            }
+            
             const distanceFromCenter = Math.sqrt(
-                Math.pow(newPoint.x - circle.centerX, 2) + 
-                Math.pow(newPoint.y - circle.centerY, 2)
+                Math.pow(newPoint.x - centerPoint.x, 2) + 
+                Math.pow(newPoint.y - centerPoint.y, 2)
             );
             
             const distanceFromBorder = Math.abs(distanceFromCenter - circle.radius);
@@ -3253,16 +3082,17 @@ class GeometryTool {
         // Auto-create angles at both endpoints
         this.autoCreateAnglesForEdge([fromPoint.id, newPoint.id]);
         
-        this.updateStatus(`✓ Point ${newPoint.id} created at ${distance}px, ${angle}° from ${fromPoint.id}`);
+        // Recreate all angles to ensure angles at other vertices are also created
+        // This handles cases where the new point intersects existing lines
+        this.recreateAllAngles();
+        
+        this.updateStatus(`✓ Point ${newPoint.id} created at ${distanceValue}px, ${angleValue}° from ${fromPoint.id}`);
         this.saveState();
     }
-    
+
     deleteAngle = (angleData) => {
-        if (angleData.arcElement) {
-            angleData.arcElement.remove();
-        }
-        if (angleData.textElement) {
-            angleData.textElement.remove();
+        if (angleData.groupElement) {
+            angleData.groupElement.remove();
         }
         
         const angleIndex = this.angles.indexOf(angleData);
@@ -3275,9 +3105,8 @@ class GeometryTool {
     }
     
     updateEdge = (data) => {
-        const { edgeObj, notes } = data;
-        edgeObj.notes = notes;
-        this.updateStatus('Edge notes saved');
+        const { edgeObj } = data;
+        this.updateStatus('Edge updated');
         this.saveState();
     }
     
@@ -3296,7 +3125,3 @@ class GeometryTool {
     }
 }
 
-// Initialize the tool
-document.addEventListener('DOMContentLoaded', () => {
-    new GeometryTool();
-});

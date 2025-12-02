@@ -107,9 +107,8 @@ export const Messages = {
     POINT_MOVED: 'point:moved',
     POINT_DELETED: 'point:deleted',
     POINT_MENU_REQUESTED: 'point:menuRequested',
-    POINT_NOTES_MENU_REQUESTED: 'point:notesMenuRequested',
-    POINT_NOTES_UPDATED: 'point:notesUpdated',
     POINT_ANGLES_DIALOG_REQUESTED: 'point:anglesDialogRequested',
+    POINT_DRAGGING: 'point:dragging',
 
     // Edge Events
     EDGE_CREATED: 'edge:created',
@@ -126,6 +125,8 @@ export const Messages = {
     ANGLE_UPDATED: 'angle:updated',
     ANGLE_BISECTOR_REQUESTED: 'angle:bisectorRequested',
     ANGLE_SOLVE_REQUESTED: 'angle:solveRequested',
+    ANGLE_SOLVABILITY_CHECK_REQUESTED: 'angle:solvabilityCheckRequested',
+    ANGLE_SOLVABILITY_CHECK_COMPLETED: 'angle:solvabilityCheckCompleted',
     ANGLE_SOLVE_COMPLETED: 'angle:solveCompleted',
     ANGLE_VALUE_CALCULATED: 'angle:valueCalculated',
 
