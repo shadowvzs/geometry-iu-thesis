@@ -1,0 +1,32 @@
+{
+    "name": "isosceles triangle where the vertex angle (circle center point angle) is bisected and 1 angle from the bisected angle is given",
+    "points": [
+        { "id": "A", "x": 570, "y": 210 },
+        { "id": "B", "x": 425, "y": 356 },
+        { "id": "C", "x": 688, "y": 377 },
+        { "id": "D", "x": 557, "y": 367 }
+    ],
+    "edges": [
+        { "p": ["A","B"] },
+        { "p": ["C","A"] },
+        { "p": ["B","D"] },
+        { "p": ["D","C"] },
+        { "p": ["A","D"] }
+    ],
+    "circles": [
+        { "id": "A", "x": 570, "y": 210, "r": 206, "p": ["B","C"] }
+    ],
+    "angles": [
+        { "id": "B", "p": ["A","C"] },
+        { "id": "C", "p": ["B","A"] },
+        { "id": "A", "p": ["B","C"] },
+        { "id": "A", "p": ["B","D"], "v": "22", "l": "α" },
+        { "id": "A", "p": ["C","D"], "l": "α" },
+        { "id": "D", "p": ["B","A"] },
+        { "id": "D", "p": ["C","A"] },
+        { "id": "B", "p": ["A","D"] },
+        { "id": "C", "p": ["A","D"] }
+    ],
+    "lines": [["B","D","C"]]
+}
+

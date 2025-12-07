@@ -110,11 +110,11 @@ body.solver-mode .circle-shape.creator-only {
     transition: stroke-width 0.2s;
 }
 
-.edge.creator-only {
+.edge-container.creator-only .edge {
     stroke-dasharray: 5,5;
 }
 
-body.solver-mode .edge.creator-only {
+body.solver-mode .edge-container.creator-only .edge {
     display: none;
 }
 
