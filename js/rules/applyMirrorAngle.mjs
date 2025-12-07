@@ -32,7 +32,7 @@ export const applyMirrorAngle = ({ angleMapsByPointId, lines }, log) => {
         }
 
         // Find all lines that pass through this vertex
-        const linesThruVertex = lines.filter(line => line.includes(vertex));
+        const linesThruVertex = lines.filter(line => line.points.includes(vertex));
         
         // We need at least 2 lines through the vertex to have mirror angles
         if (linesThruVertex.length < 2) {
@@ -46,16 +46,15 @@ export const applyMirrorAngle = ({ angleMapsByPointId, lines }, log) => {
                 const line2 = linesThruVertex[j];
 
                 // Get the points on each side of the vertex for each line
-                const vertexIndex1 = line1.indexOf(vertex);
-                const vertexIndex2 = line2.indexOf(vertex);
+                const vertexIndex1 = line1.points.indexOf(vertex);
+                const vertexIndex2 = line2.points.indexOf(vertex);
 
                 // Points before and after vertex on line1
-                const line1Before = line1.slice(0, vertexIndex1);
-                const line1After = line1.slice(vertexIndex1 + 1);
-
+                const line1Before = line1.points.slice(0, vertexIndex1);
+                const line1After = line1.points.slice(vertexIndex1 + 1);
                 // Points before and after vertex on line2
-                const line2Before = line2.slice(0, vertexIndex2);
-                const line2After = line2.slice(vertexIndex2 + 1);
+                const line2Before = line2.points.slice(0, vertexIndex2);
+                const line2After = line2.points.slice(vertexIndex2 + 1);
 
                 // Skip if we don't have points on both sides of either line
                 if ((!line1Before.length || !line1After.length) ||

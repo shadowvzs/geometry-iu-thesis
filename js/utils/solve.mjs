@@ -1,7 +1,10 @@
 import { 
     areAllTrianglesValid,
     getAngleMapsByPointId,
+    getAnglesNeedToBeSolved,
+    getAnglesAlreadySolved,
     validateAllTriangles,
+    isSolvedAngle,
 } from './mathHelper.mjs';
 
 import { applySameLabelAngles } from '../rules/applySameLabelAngles.mjs';
@@ -10,6 +13,15 @@ import { applySupplementaryAngles } from '../rules/applySupplementaryAngles.mjs'
 import { applySameAngles } from '../rules/applySameAngles.mjs';
 import { applyComposedAngles } from '../rules/applyComposedAngles.mjs';
 import { applyMirrorAngle } from '../rules/applyMirrorAngle.mjs';
+
+const scores = {
+    applySameLabelAngles: 1,
+    applySupplementaryAngles: 2,
+    applyTriangleAngleSum: 3,
+    applyComposedAngles: 2,
+    applyMirrorAngle: 1,
+    applySameAngles: 0,
+}
 
 export const solve = ({ angles, points, lines, triangles, circles }, { setAngle, maxIterations = 100 }) => {
     // Start performance benchmark
@@ -24,8 +36,11 @@ export const solve = ({ angles, points, lines, triangles, circles }, { setAngle,
         triangles,
         circles,
     };
+
+    const anglesNeedToBeSolved = getAnglesNeedToBeSolved(angles);
     let changesMade = true;
     let iterations = 0;
+    let score = 0;
 
     const angleSolverMethods = [
         applySameLabelAngles,
@@ -41,7 +56,7 @@ export const solve = ({ angles, points, lines, triangles, circles }, { setAngle,
         iterations++;
         
         // Check if all angles are solved
-        const unsolvedAngles = angles.filter(a => !a.value || a.value === '?').length;
+        const unsolvedAngles = angles.filter(a => !a.value).length;
         if (unsolvedAngles === 0) {
             break;
         }
@@ -54,6 +69,7 @@ export const solve = ({ angles, points, lines, triangles, circles }, { setAngle,
         for (const solverMethod of angleSolverMethods) {
             if (solverMethod(data, setAngle)) {
                 changesMade = true;
+                score += scores[solverMethod.name];
             }
         }
     }
@@ -65,8 +81,9 @@ export const solve = ({ angles, points, lines, triangles, circles }, { setAngle,
     
     const isValid = validateAllTriangles(triangles, angles);
 
-    const solved = angles.filter(a => a.value && a.value !== '?').length === angles.length;
-
+    const solved = anglesNeedToBeSolved.length > 0 && anglesNeedToBeSolved.every(a => isSolvedAngle(a));
+    const allSolved = angles.length > 0 && getAnglesAlreadySolved(angles).length === angles.length;
+    
     // End performance benchmark
     const endTime = performance.now();
     const executionTime = endTime - startTime;
@@ -76,5 +93,7 @@ export const solve = ({ angles, points, lines, triangles, circles }, { setAngle,
         executionTime,
         iterations,
         solved,
+        allSolved,
+        score,
     };
 }

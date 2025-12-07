@@ -166,7 +166,7 @@ export class Toolbar {
         return this.buttonMap.get(id)?.element;
     }
 
-    updateFeedback = (canBeSolved) => {
-        this.feedback.textContent = canBeSolved ? '✔' : '✖';
+    updateFeedback = (text) => {
+        this.feedback.textContent = text;
     }
 }

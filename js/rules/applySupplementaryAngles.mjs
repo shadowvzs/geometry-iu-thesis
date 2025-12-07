@@ -22,7 +22,7 @@ const getAdjacentAngles = ({
 
     // Check if two points are on opposite sides of vertex (on a line)
     const isOnLine = (p1, p2) => lines.some(line =>
-        line.includes(vertex) && line.includes(p1) && line.includes(p2)
+        line.points.includes(vertex) && line.points.includes(p1) && line.points.includes(p2)
     );
 
     return rays.map((curr, i) => {
@@ -55,14 +55,14 @@ export const applySupplementaryAngles = ({
         }
 
         lines.forEach(line => {
-            const vertexPointIndex = line.indexOf(vertex);
+            const vertexPointIndex = line.points.indexOf(vertex);
             // if position -1 (not exist) or 0 (first element) or last element then return false
-            if (vertexPointIndex < 1 || vertexPointIndex === line.length - 1) {
+            if (vertexPointIndex < 1 || vertexPointIndex === line.points.length - 1) {
                 return;
             }
 
-            const pointsBeforeThisVertex = line.slice(0, vertexPointIndex);
-            const pointsAfterThisVertex = line.slice(vertexPointIndex + 1);
+            const pointsBeforeThisVertex = line.points.slice(0, vertexPointIndex);
+            const pointsAfterThisVertex = line.points.slice(vertexPointIndex + 1);
             const hasAtleastOnePointBefore = anglesWithThisVertex.some(angle => pointsBeforeThisVertex.includes(angle.sidepoints[0]) || pointsBeforeThisVertex.includes(angle.sidepoints[1]));
             const hasAtleastOnePointAfter = anglesWithThisVertex.some(angle => pointsAfterThisVertex.includes(angle.sidepoints[0]) || pointsAfterThisVertex.includes(angle.sidepoints[1]));
             if (!hasAtleastOnePointBefore || !hasAtleastOnePointAfter) {

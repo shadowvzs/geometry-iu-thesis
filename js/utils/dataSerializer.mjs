@@ -46,14 +46,14 @@ export function serializeGeometryData(geometryData) {
                 x: Math.round(point.x),
                 y: Math.round(point.y)
             };
-            if (point.hide) serialized.h = true;
+            if (point.hide) serialized.h = 1;
             return serialized;
         }),
         edges: edges.map(edge => {
             const serialized = {
-                p: edge.points || []
+                p: edge.points || [],
             };
-            if (edge.hide) serialized.h = true;
+            if (edge.hide) serialized.h = 1;
             return serialized;
         }),
         circles: circles.map(circle => {
@@ -66,20 +66,21 @@ export function serializeGeometryData(geometryData) {
             if (circle.pointsOnLine && circle.pointsOnLine.length > 0) {
                 serialized.p = circle.pointsOnLine;
             }
-            if (circle.hide) serialized.h = true;
+            if (circle.hide) serialized.h = 1;
             return serialized;
         }),
         angles: angles.map(angle => {
             const serialized = {
                 id: angle.pointId,
-                p: angle.sidepoints || []
+                p: angle.sidepoints || [],
             };
             if (angle.value != null) serialized.v = angle.value;
             if (angle.label) serialized.l = angle.label;
-            if (angle.hide) serialized.h = true;
+            if (angle.hide) serialized.h = 1;
+            if (angle.target) serialized.t = 1;
             return serialized;
         }),
-        lines: lines
+        lines: lines.map(line => line.points)
         // triangles removed - they are rebuilt from edges/lines by updateTriangles()
     };
     
@@ -163,6 +164,7 @@ export function deserializeGeometryData(jsonData) {
                 value: angleData.v || null,
                 label: angleData.l || '',
                 hide: !!angleData.h,
+                target: !!angleData.t,
                 name: getAngleNameFromPoints(angleData.id, angleData.p[0], angleData.p[1]),
                 // ui related and will be populated later
                 radius: null,
@@ -286,7 +288,7 @@ export const enrichGeometryData = (data) => {
     const circles = [];
     const definitions = data.definitions || [];
     const edges = [];
-    const lines = [...data.lines];
+    const lines = [];
     const points = [];
     const pointsMap = new Map(); // helper where the key is the point id and the value is the point object
     const overlappingAngles = new Map();
@@ -313,6 +315,14 @@ export const enrichGeometryData = (data) => {
         adjacentPoints.get(pointId).add(adjacentPointId);
     };
 
+    data.lines.forEach(linePoints => {
+        // Rebuild lines
+        lines.push({
+            id: Math.random().toString(32),
+            points: linePoints
+        });
+    });
+
     // Restore edges
     if (data.edges) {
         data.edges.forEach(edgeData => {
@@ -323,6 +333,7 @@ export const enrichGeometryData = (data) => {
             if (point1 && point2) {
                 const edge = {
                     points: [pointIds[0], pointIds[1]],
+                    hide: edgeData.hide,
                     element: null // to be set after drawing
                 };
 
@@ -347,7 +358,9 @@ export const enrichGeometryData = (data) => {
             
             if (centerPoint) {
                 // Draw circle
+                const id = Math.random().toString(36).substring(2, 15);
                 const circleObj = {
+                    id: id,
                     name: circleData.id || `Circle_${centerPoint.id}`,
                     centerPoint: centerPointId,
                     centerX: Math.round(circleData.centerX),
@@ -362,7 +375,7 @@ export const enrichGeometryData = (data) => {
     }
             
     // Rebuild triangles BEFORE angles (needed for isAngleInTriangle check)
-    triangles.push(...getTriangles(angles, adjacentPoints, lines, pointsMap));
+    triangles.push(...getTriangles(angles, adjacentPoints, lines));
     
     // Restore angles - manually recreate only the angles that existed in the saved data
     if (data.angles) {
@@ -384,7 +397,7 @@ export const enrichGeometryData = (data) => {
                 angleDegrees,
                 radius
             } = getAngleCalculatedInfo(vertex, point1, point2);
-            
+
             angle.radius = radius;
             angle.startAngle = angle1;
             angle.endAngle = angle2;

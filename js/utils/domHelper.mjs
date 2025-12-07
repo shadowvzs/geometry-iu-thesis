@@ -10,7 +10,7 @@
 export function createElement(tagName, attributes = {}, children = []) {
     // SVG elements that need createElementNS
     const svgElements = ['svg', 'line', 'circle', 'path', 'text', 'g', 'rect', 'polygon', 'polyline', 'ellipse', 'marker', 'defs'];
-    
+
     let element;
     if (svgElements.includes(tagName.toLowerCase())) {
         element = document.createElementNS('http://www.w3.org/2000/svg', tagName);

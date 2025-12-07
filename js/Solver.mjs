@@ -4,9 +4,6 @@ import { MessagingHub, Messages } from './MessagingHub.mjs';
 
 import { solve } from './utils/solve.mjs';
 
-// Managers
-import { HistoryManager } from './HistoryManager.mjs';
-
 // Utils
 import { 
     arePointsCollinear, 
@@ -17,21 +14,34 @@ import {
     findPointNeighbors,
     findNearbyEdges,
     getAngleValue,
+    getHighlightableElements,
     getNewPointName,
     getTriangles,
+    increaseAngleRadius,
+    insertPointBetweenEdgePointsInLine,
+    isEdgeOnThisLine,
     isPointInsideAngle,
     isPointInTriangle, 
     isPointOnCircle,
+    isPointsOnSameLine,
     isThisAngle,
     normalizeAngle,
+    pointToSegmentDistance,
     getAngleCalculatedInfo,
     getAngleDisplayText,
     getAngleNameFromPoints,
     getSameAngleNames,
+    sortLinePoints,
 } from './utils/mathHelper.mjs';
 import {
     createElement,
 } from './utils/domHelper.mjs';
+import {
+    CREATOR_ONLY_CLASS,
+    renderCircle,
+    renderEdge,
+    renderPointGroup,
+} from './utils/elementHelper.mjs';
 import {
     enrichGeometryData,
     deserializeGeometryData,
@@ -61,7 +71,6 @@ export class Solver {
         this.edges = [];
         this.angles = [];
         this.lines = []; // Track collinear points (points on same edge)
-        this.linesWeakMap = new WeakMap(); // Map edge objects to their line arrays
         this.definitions = [];
         this.selectedPoints = [];
         this.currentTool = 'addPoint';
@@ -75,9 +84,6 @@ export class Solver {
         this.history = [];
         this.historyIndex = -1;
         this.maxHistorySize = 50;
-        
-        // Initialize managers
-        this.historyManager = new HistoryManager(this);
         
         // Subscribe to messages
         this.setupMessageSubscriptions();
@@ -190,11 +196,11 @@ export class Solver {
         // Check if the moved point is now on any edge (for collinearity)
         // Update existing lines that contain this point
         this.lines.forEach(line => {
-            if (line.includes(point.id)) {
+            if (line.points.includes(point.id)) {
                 // Verify the point is still collinear with its neighbors in the line
-                const pointIndex = line.indexOf(point.id);
-                const prevPoint = pointIndex > 0 ? this.pointsMap.get(line[pointIndex - 1]) : null;
-                const nextPoint = pointIndex < line.length - 1 ? this.pointsMap.get(line[pointIndex + 1]) : null;
+                const pointIndex = line.points.indexOf(point.id);
+                const prevPoint = pointIndex > 0 ? this.pointsMap.get(line.points[pointIndex - 1]) : null;
+                const nextPoint = pointIndex < line.points.length - 1 ? this.pointsMap.get(line.points[pointIndex + 1]) : null;
                 
                 if (prevPoint && nextPoint) {
                     arePointsCollinearByPosition(prevPoint, point, nextPoint, threshold);
@@ -212,9 +218,149 @@ export class Solver {
     }
 
     addLine = (linePoints) => {
-        this.lines.push(linePoints);
-        const id = Math.random().toString(36);
-        this.linesWeakMap.set(linePoints, id);
+        // it was called after the serialization
+        if (Array.isArray(linePoints)) {
+            this.lines.push({
+                id: Math.random().toString(36),
+                points: linePoints
+            });
+        } else {
+            this.lines.push(linePoints);
+        }    
+    }
+
+    checkPointIntersections = (point, { fixPointPosition } = {}) => {
+        const result = getHighlightableElements({
+            lines: this.lines,
+            edges: this.edges,
+            circles: this.circles,
+            pointsMap: this.pointsMap
+        }, point);
+
+        if (result.circles.length > 0) {
+            const circles = this.circles.filter(c => result.circles.includes(c.id));
+            circles.forEach(circle => {
+                if (!circle.pointsOnLine) { circle.pointsOnLine = []; }
+                if (!circle.pointsOnLine.includes(point.id)) {
+                    circle.pointsOnLine.push(point.id);
+                }
+            });
+        }
+
+        // we used only the lines which have the point on them
+        let lines = this.lines.filter(l => result.lines.includes(l.id));
+        // we use only edges which have the point on them
+        let edges = this.edges.filter(e => result.edges.includes(e.id) && !result.intersectedEdges.includes(e.id));
+        const intersectedEdges = this.edges.filter(e => result.intersectedEdges.includes(e.id));
+
+        if (intersectedEdges.length > 0) {
+            if (fixPointPosition) {
+                this.fixPointPositionOnEdges(point, intersectedEdges);
+            }
+            // here we process the intersected edges, so we remove from the edge list
+            edges = edges.filter(e => result.intersectedEdges.includes(e.id));
+            intersectedEdges.forEach(edge => {
+                // (line, pairPointIds, pointId)
+                const existingLine = lines.find(l => isEdgeOnThisLine(edge, l));
+                if (existingLine) {
+                    lines = lines.filter(l => l.id !== existingLine.id);
+                    insertPointBetweenEdgePointsInLine(existingLine, edge.points, point.id);
+                } else {
+                    this.addLine([edge.points[0], point.id, edge.points[1]]);
+                }
+
+                // Remove the old edge that was intersected
+                const oldEdgeIndex = this.edges.findIndex(e => edge.id === e.id);
+                if (oldEdgeIndex > -1) {
+                    this.edges.splice(oldEdgeIndex, 1);
+                    // Remove the old edge line element from DOM
+                    if (edge.element) {
+                        edge.element.remove();
+                    }
+                }
+                
+                // Create two new edges: from point1 to newPoint and from newPoint to point2
+                this.createEdge(edge.points[0], point.id);
+                this.createEdge(point.id, edge.points[1]);
+            });
+        }
+        if (lines.length > 0) {
+            lines.forEach(line => {
+                const points = sortLinePoints([...line.points, point.id], this.pointsMap);
+                line.points = points;
+                edges = edges.filter(e => !isEdgeOnThisLine(e, line));
+            });
+        }
+        // edges being collinear with new point but the point is not in between edge points
+        if (edges.length > 0) {
+            edges.forEach(edge => {
+                const existingLine = this.lines.find(l => isEdgeOnThisLine(edge, l));
+                if (existingLine) {
+                    lines = lines.filter(l => l.id !== existingLine.id);
+                    const points = sortLinePoints([...existingLine.points, point.id], this.pointsMap);
+                    existingLine.points = points;
+                } else {
+                    const points = sortLinePoints([...edge.points, point.id], this.pointsMap);
+                    this.addLine(points);
+                }
+            });
+        }
+    }
+
+    fixPointPositionOnEdges = (point, intersectedEdges) => {
+        const avgPosition = intersectedEdges.reduce((acc, edge) => {
+            const [edgePoint1, edgePoint2] = edge.points.map(pid => this.pointsMap.get(pid));
+            const { closestPoint } = pointToSegmentDistance(
+                point.x, point.y,
+                edgePoint1.x, edgePoint1.y,
+                edgePoint2.x, edgePoint2.y
+            );
+
+            acc.x += closestPoint.x;
+            acc.y += closestPoint.y;
+            return acc;
+        }, { x: 0, y: 0 });
+
+        avgPosition.x = Math.round(avgPosition.x / intersectedEdges.length);
+        avgPosition.y = Math.round(avgPosition.y / intersectedEdges.length);
+        
+        // Update point position to be exactly on the edge
+        point.x = Math.round(avgPosition.x);
+        point.y = Math.round(avgPosition.y);
+
+        // Update the visual position of the point
+        const pointGroup = this.svgGroup.point.querySelector(`.point-group[data-point-id="${point.id}"]`);
+        if (pointGroup) {
+            const circle = pointGroup.querySelector('circle');
+            const text = pointGroup.querySelector('text');
+            if (circle) {
+                circle.setAttribute('cx', point.x);
+                circle.setAttribute('cy', point.y);
+            }
+            if (text) {
+                text.setAttribute('x', point.x);
+                text.setAttribute('y', point.y - 12);
+            }
+        }
+    }
+
+    createEdge = (point1Id, point2Id) => {
+        // Create edge between points
+        const fromPoint = this.pointsMap.get(point1Id);
+        const toPoint = this.pointsMap.get(point2Id);
+        const line = renderEdge(fromPoint, toPoint);
+        this.svgGroup.edge.appendChild(line);
+        const newEdge = {
+            id: Math.random().toString(36),
+            points: [fromPoint.id, toPoint.id],
+            element: line
+        };
+        this.edges.push(newEdge);
+        
+        // Update adjacency map for the new edge
+        this.addAdjacentPoint(fromPoint.id, toPoint.id);
+        this.addAdjacentPoint(toPoint.id, fromPoint.id);
+        return newEdge;
     }
 
     updateStatus = (message) => {
@@ -225,9 +371,11 @@ export class Solver {
         // create UI
         this.ui.initialize();
         this.svg = this.ui.canvas.svg;
+        this.svgGroup = this.ui.canvas.svgGroup;
 
         // Initialize toolbar buttons - use messaging hub
-        const { registerButton } = this.ui.toolbar;
+        const { registerButton, registerFeedback } = this.ui.toolbar;
+        registerFeedback();
         registerButton('drawPoint', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'addPoint'));
         registerButton('drawCircle', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'drawCircle'));
         registerButton('drawEdge', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'drawEdge'));
@@ -273,8 +421,9 @@ export class Solver {
         if (data) {
             this.loadData(data);
         }
-        const finalAngle = this.angles.find(a => a.label && a.value === "?");
-        if (!finalAngle) { return; }
+
+        const targetAngle = this.angles.find(a => a.target);
+        if (!targetAngle) { return; }
         const clonedData = deepClone({
             angles: this.angles,
             lines: this.lines,
@@ -282,15 +431,18 @@ export class Solver {
             triangles: this.triangles.map(tri => Array.from(tri)),
             circles: this.circles
         });
-        const { solved } = solve(clonedData, {
+
+        const { solved, score } = solve(clonedData, {
             setAngle: () => { },
             maxIterations: 100
         });
+
+        this.ui.toolbar.updateFeedback(score || '-');
         if (!solved) { alert('Warning: Problem could not be fully solved with the given data.'); return; }
 
-        const solvedAngle = clonedData.angles.find(a => a.name === finalAngle.name);
+        const solvedAngle = clonedData.angles.find(a => a.name === targetAngle.name);
         this.ui.panels.getPanel('result').updatePanel(
-            finalAngle,
+            targetAngle,
             solvedAngle
         );
     }
@@ -504,39 +656,25 @@ export class Solver {
         // First, check each existing line to see if this point is collinear with it
         for (const line of this.lines) {
             // Skip if point is already in this line
-            if (line.includes(point.id)) continue;
+            if (line.points.includes(point.id)) continue;
             
             // Need at least 2 points in the line to check collinearity
-            if (line.length < 2) continue;
+            if (line.points.length < 2) continue;
             
             // Get two points from the line to check collinearity
-            const point1 = this.pointsMap.get(line[0]);
-            const point2 = this.pointsMap.get(line[1]);
+            const point1 = this.pointsMap.get(line.points[0]);
+            const point2 = this.pointsMap.get(line.points[1]);
             
             if (!point1 || !point2) continue;
             
             // Check if the new point is collinear with the line
             if (arePointsCollinearByPosition(point1, point2, point, 5)) {
                 // Point is collinear - add it to the line
-                line.push(point.id);
-                
-                // Re-sort the line based on actual positions
-                const linePoints = line.map(id => this.pointsMap.get(id)).filter(p => p);
-                
-                linePoints.sort((a, b) => {
-                    if (Math.abs(a.x - b.x) > 1) {
-                        return a.x - b.x;
-                    } else {
-                        return a.y - b.y;
-                    }
-                });
-                
-                // Update the line array with sorted IDs
-                line.length = 0;
-                line.push(...linePoints.map(p => p.id));
-                
+                line.points.push(point.id);
+                line.points = sortLinePoints(line.points, this.pointsMap);
+                                
                 // Mark this edge pair as processed
-                const edgeKey = [line[0], line[line.length - 1]].sort().join('-');
+                const edgeKey = [line.points[0], line.points[line.points.length - 1]].sort().join('-');
                 processedEdgePairs.add(edgeKey);
             }
         }
@@ -556,7 +694,7 @@ export class Solver {
             
             // Check if there's already a line containing both edge points
             const existingLine = this.lines.find(line => 
-                line.includes(point1Id) && line.includes(point2Id)
+                isPointsOnSameLine(line, point1Id, point2Id)
             );
             if (existingLine) continue; // Already handled by existing line check above
             
@@ -568,19 +706,8 @@ export class Solver {
             // Check if the new point is collinear with this edge
             if (arePointsCollinearByPosition(edgePoint1, edgePoint2, point, 5)) {
                 // Create a new line with these three points
-                const linePoints = [edgePoint1, edgePoint2, point];
-                
-                // Sort by position
-                linePoints.sort((a, b) => {
-                    if (Math.abs(a.x - b.x) > 1) {
-                        return a.x - b.x;
-                    } else {
-                        return a.y - b.y;
-                    }
-                });
-                
-                const newLine = linePoints.map(p => p.id);
-                this.addLine(newLine);
+                const newLinePoints = sortLinePoints([edgePoint1.id, edgePoint2.id, point.id], this.pointsMap);
+                this.addLine(newLinePoints);
                 
                 // Mark as processed
                 processedEdgePairs.add(edgeKey);
@@ -599,8 +726,7 @@ export class Solver {
         
         this.addPoint(point);
         this.drawPoint(point);
-        this.checkPointOnCircles(point);
-        this.checkPointOnLines(point);
+        this.checkPointIntersections(point, { fixPointPosition: true });
         this.saveState();
     }
     
@@ -613,6 +739,8 @@ export class Solver {
         
         this.addPoint(point);
         this.drawPoint(point);
+        this.checkPointIntersections(point, { fixPointPosition: true });
+        this.saveState();
         
         return point;
     }
@@ -620,43 +748,19 @@ export class Solver {
     drawPoint = (point) => {
         const classes = ['point-group'];
         if (point.hide) classes.push('hide');
-        const group = createElement('g', {
-            class: classes
-        });
-        group.dataset.pointId = point.id;
-        // SVG doesn't use z-index the same way - use pointer-events instead
-        group.style.pointerEvents = 'auto'; // Ensure points are always clickable
-        
-        const circle = createElement('circle', {
-            class: 'point-circle',
-            cx: point.x,
-            cy: point.y,
-            r: 8
-        });
-        
-        const text = createElement('text', {
-            class: 'point-label',
-            x: point.x,
-            y: point.y - 15
-        });
-        text.textContent = point.id;
-        
-        group.appendChild(circle);
-        group.appendChild(text);
-        
+        const group = renderPointGroup(point);        
         group.addEventListener('click', (e) => {
             e.stopPropagation();
             this.handlePointClick(point);
         });
         
         // Remove any previous references to this point first
-        const existingGroup = this.ui.canvas.svg.querySelector(`g[data-point-id="${point.id}"]`);
+        const existingGroup = this.svgGroup.point.querySelector(`g[data-point-id="${point.id}"]`);
         if (existingGroup) {
             existingGroup.remove();
         }
         
-        // IMPORTANT: Append to the END of SVG (so it appears on top)
-        this.ui.canvas.svg.appendChild(group);
+        this.svgGroup.point.appendChild(group);
     }
     
     updatePointSelection = () => {
@@ -729,26 +833,7 @@ export class Solver {
         // Create edge if it doesn't exist (but don't save yet - create edge silently)
         if (!edgeExists) {
             // Create edge line
-            const line = createElement('line', {
-                class: 'line',
-                x1: centerPoint.x,
-                y1: centerPoint.y,
-                x2: circlePoint.x,
-                y2: circlePoint.y
-            });
-            
-            this.svg.insertBefore(line, this.svg.firstChild);
-            
-            const edgeObj = {
-                points: [centerPoint.id, circlePoint.id],
-                element: line
-            };
-            
-            this.edges.push(edgeObj);
-            
-            // Update adjacency map
-            this.addAdjacentPoint(centerPoint.id, circlePoint.id);
-            this.addAdjacentPoint(circlePoint.id, centerPoint.id);
+            this.createEdge(centerPoint.id, circlePoint.id);
             
             // Auto-create angles at both endpoints
             this.createAnglesForNewEdge(centerPoint.id, circlePoint.id);
@@ -777,14 +862,8 @@ export class Solver {
         }
         
         // Create edge line
-        const line = createElement('line', {
-            class: 'line',
-            x1: point1.x,
-            y1: point1.y,
-            x2: point2.x,
-            y2: point2.y
-        });
-        
+        const line = renderEdge(point1, point2);
+       
         // Insert behind points
         this.svg.insertBefore(line, this.svg.firstChild);
         
@@ -922,16 +1001,16 @@ export class Solver {
         // Track collinear points: the new point splits the edge into two segments
         // Check if there's already a line containing both point1 and point2
         const existingLine = this.lines.find(line => 
-            line.includes(id1) && line.includes(id2)
+            line.points.includes(id1) && line.points.includes(id2)
         );
         
         if (existingLine) {
             // Check if newPoint already exists in the line
-            if (!existingLine.includes(newPoint.id)) {
+            if (!existingLine.points.includes(newPoint.id)) {
                 // insert into the current position based on distance from the first point
-                existingLine.push(newPoint.id);
-                const firstPoint = this.pointsMap.get(existingLine[0]);
-                existingLine.sort((a, b) => {
+                existingLine.points.push(newPoint.id);
+                const firstPoint = this.pointsMap.get(existingLine.points[0]);
+                existingLine.points.sort((a, b) => {
                     const aPoint = this.pointsMap.get(a);
                     const bPoint = this.pointsMap.get(b);
                     const aPointDistance = distance(firstPoint.x, firstPoint.y, aPoint.x, aPoint.y);
@@ -945,13 +1024,7 @@ export class Solver {
         }
         
         // Create two new edges: point1 to newPoint and newPoint to point2
-        const line1 = createElement('line', {
-            class: 'line',
-            x1: point1.x,
-            y1: point1.y,
-            x2: newPoint.x,
-            y2: newPoint.y
-        });
+        const line1 = renderEdge(point1, newPoint);
         this.svg.insertBefore(line1, this.svg.firstChild);
         
         this.edges.push({
@@ -963,13 +1036,7 @@ export class Solver {
         this.addAdjacentPoint(id1, newPoint.id);
         this.addAdjacentPoint(newPoint.id, id1);
         
-        const line2 = createElement('line', {
-            class: 'line',
-            x1: newPoint.x,
-            y1: newPoint.y,
-            x2: point2.x,
-            y2: point2.y
-        });
+        const line2 = renderEdge(newPoint, point2);
         this.svg.insertBefore(line2, this.svg.firstChild);
         
         this.edges.push({
@@ -1013,7 +1080,7 @@ export class Solver {
     
     updateTriangles = () => {
         // Clear existing triangles
-        this.triangles = getTriangles(this.angles, this.adjacentPoints, this.lines, this.pointsMap);
+        this.triangles = getTriangles(this.angles, this.adjacentPoints, this.lines);
     }
 
     handlePointClick = (point) => {
@@ -1095,18 +1162,19 @@ export class Solver {
                     if (adjPoint1 && adjPoint2) {
                         // createAngle will skip if the 3 points are collinear
                         if (this.lines.some(line => (
-                            line.includes(point.id) &&
-                            line.includes(adjPoint1.id) &&
-                            line.includes(adjPoint2.id)
+                            line.points.includes(point.id) &&
+                            line.points.includes(adjPoint1.id) &&
+                            line.points.includes(adjPoint2.id)
                         ))) {
                             continue; // Skip if point is collinear with either adjacent point
                         }
-                        const { angleDegrees } = getAngleCalculatedInfo(point, adjPoint1, adjPoint2);
+                        const calculatedValues = getAngleCalculatedInfo(point, adjPoint1, adjPoint2);
+                        if (!calculatedValues) { continue; }
                         angleData.push({
                             vertex: point,
                             point1: adjPoint1,
                             point2: adjPoint2,
-                            angleDegrees
+                            angleDegrees: calculatedValues.angleDegrees
                         });
                         // this.createAngle(point, adjPoint1, adjPoint2);
                     }
@@ -1168,25 +1236,14 @@ export class Solver {
             return;
         }
 
-        const angleId = Date.now() + Math.random();
-        
         // Generate angle name (e.g., "∠ABC" where B is vertex)
         const angleName = getAngleNameFromPoints(vertex.id, point1.id, point2.id);
-        
-         
-        // Check if all 3 points (vertex + both sidepoints) are in the same triangle
-        const isAngleInTriangle = isAngleInTriangleByEdges(vertex.id, point1.id, point2.id, this.adjacentPoints);
-        
-        // Check if vertex is on a line (supplementary angle scenario)
-        // Supplementary angles should be shown even if not all 3 points are in a triangle
-        const isSupplementaryAngle = this.lines.some(line => line.includes(vertex.id));
-        
         // Show angle if: (in triangle OR supplementary) AND not overlapping
         const shouldHide = false ;//(!isAngleInTriangle && !isSupplementaryAngle);
 
         // Create angle data object (pure data, no DOM references)
         const angleData = {
-            id: angleId,
+            id: angleName,
             pointId: vertex.id,
             sidepoints: [point1.id, point2.id],
             value: null,
@@ -1267,7 +1324,7 @@ export class Solver {
             hasTextOverlap = false;
             
             // Query DOM directly for text elements at THIS vertex only
-            const anglesAtVertex = this.ui.canvas.svg.querySelectorAll(
+            const anglesAtVertex = this.svgGroup.angle.querySelectorAll(
                 `[data-angle-vertex-id="${angleData.pointId}"] text`
             );
             
@@ -1325,7 +1382,7 @@ export class Solver {
         const sameAngleNames = getSameAngleNames(angleData, this.angles, this.lines);
         if (sameAngleNames.length > 0) {
             const sameAnglesSelector = sameAngleNames.map(name => `[data-angle-name="${name}"]`).join(',');
-            const isAngleExistAlready = this.ui.canvas.svg.querySelector(sameAnglesSelector);
+            const isAngleExistAlready = this.svgGroup.angle.querySelector(sameAnglesSelector);
             if (isAngleExistAlready) {
                 return;
             }
@@ -1387,12 +1444,12 @@ export class Solver {
             class: 'angle-group',
             'data-angle-id': angleData.id,
             'data-angle-name': angleData.name,
-            'data-angle-vertex-id': angleData.pointId
+            'data-angle-vertex-id': angleData.pointId,
+            'data-angle-radius': angleData.radius
         });
 
-        console.log('Rendering angle:', angleData.name, 'ID:', angleData.id, angleData.value, angleData.label);
-        if (angleData.label && angleData.value === "?") {
-            group.classList.add('final-angle');
+        if (angleData.target) {
+            group.classList.add('target-angle');
         }
 
         const path = createElement('path', {
@@ -1420,41 +1477,32 @@ export class Solver {
         
         // Store the group element reference
         angleData.groupElement = group;
-        
-        // Add event handlers to the group - hover on group affects both children
-        const clickHandler = (e) => {
-            e.stopPropagation();
-            this.messagingHub.emit(Messages.ANGLE_CLICKED, { angleData, event: e });
-        };
-        
-        group.addEventListener('click', clickHandler);
-        
-        // Hide if shouldHide (overlapping OR not in triangle and not supplementary)
+
+        // we not mount if it is not visible
         if (angleData.hide) {
-            group.style.display = 'none';
+            return;
         }
         
-        // Always add DOM elements to SVG (even if hidden)
-        // Insert BEFORE points so angles appear behind points
-        const firstPointGroup = this.ui.canvas.svg.querySelector('.point-group');
-        if (firstPointGroup) {
-            this.ui.canvas.svg.insertBefore(group, firstPointGroup);
+        // Insert into angle group, sorted by radius (larger first so smaller appears on top)
+        const angleElements = this.svgGroup.angle.querySelectorAll('.angle-group');
+    
+        // Find first element with attribute value < newValue
+        let insertAfter = null;
+        for (const angleElement of angleElements) {
+            const childValue = parseFloat(angleElement.getAttribute('data-angle-radius'));
+            if (childValue < angleData.radius) {
+                insertAfter = angleElement;
+                break;
+            }
+        }
+
+        if (insertAfter) {
+            this.svgGroup.angle.insertBefore(group, insertAfter.nextSibling);
         } else {
-            // No points yet, just append
-            this.ui.canvas.svg.appendChild(group);
+            this.svgGroup.angle.appendChild(group);
         }
     }
 
-    handleAngleClick = (angleData) => {
-        if (this.currentTool === 'pointer' || this.currentTool === 'assignAngle') {
-            this.messagingHub.emit(Messages.ANGLE_EDIT_REQUESTED, angleData);
-        } else if (this.currentTool === 'angleBisector') {
-            this.messagingHub.emit(Messages.ANGLE_BISECTOR_REQUESTED, angleData);
-        } else {
-            this.updateStatus('Switch to "Pointer", "Assign Angle", or "Angle Bisector" tool to interact with angles');
-        }
-    }
-    
     redrawAngleArc = (angleData) => {
         // Skip if no DOM elements (shouldn't happen with new logic, but keep for safety)
         if (!angleData.groupElement) {
@@ -1629,24 +1677,100 @@ export class Solver {
    
     // Delegates to historyManager to save the current state for undo/redo.
     saveState = () => {
-        return this.historyManager.saveState();
+        const state = {
+            points: this.points.map(p => {
+                const point = { id: p.id, x: p.x, y: p.y };
+                if (p.hide) point.hide = true;
+                return point;
+            }),
+            edges: this.edges.map(e => {
+                const edge = { points: [...e.points] };
+                if (e.hide) edge.hide = true;
+                return edge;
+            }),
+            circles: this.circles.map(c => {
+                const circle = {
+                    name: c.name,
+                    centerPoint: c.centerPoint,
+                    centerX: c.centerX,
+                    centerY: c.centerY,
+                    radius: c.radius,
+                    pointsOnLine: c.pointsOnLine ? [...c.pointsOnLine] : []
+                };
+                if (c.hide) circle.hide = true;
+                return circle;
+            }),
+            angles: this.angles.map(a => {
+                const angle = {
+                    pointId: a.pointId,
+                    sidepoints: a.sidepoints || [],
+                    value: a.value,
+                    calculatedValue: a.calculatedValue,
+                    name: a.name || '',
+                    label: a.label || '',
+                    id: a.id,
+                    radius: a.radius || 30
+                };
+                if (a.hide) angle.hide = true;
+                if (a.target) angle.target = true;
+                return angle;
+            }),
+            bisectedAngles: Array.from(this.bisectedAngles),
+            linkedAngles: Array.from(this.linkedAngles.entries()),
+            lines: deepClone(this.lines),
+            definitions: deepClone(this.definitions),
+        };
+        
+        // Remove any redo history when a new action is performed
+        if (this.historyIndex < this.history.length - 1) {
+            this.history = this.history.slice(0, this.historyIndex + 1);
+        }
+        
+        // Add new state to history
+        this.history.push(state);
+        
+        // Limit history size
+        if (this.history.length > this.maxHistorySize) {
+            this.history.shift();
+        } else {
+            this.historyIndex++;
+        }
+
+        this.updateUndoRedoButtons();
     }
     
     undo = () => {
-        return this.historyManager.undo();
+        if (this.historyIndex > 0) {
+            this.historyIndex--;
+            const state = this.history[this.historyIndex];
+            this.restoreState(state);
+            this.updateStatus('↶ Undo');
+        } else {
+            this.updateStatus('Nothing to undo');
+        }
     }
     
     redo = () => {
-        return this.historyManager.redo();
+        if (this.historyIndex < this.history.length - 1) {
+            this.historyIndex++;
+            this.restoreState(this.history[this.historyIndex]);
+            this.updateStatus('↷ Redo');
+        } else {
+            this.updateStatus('Nothing to redo');
+        }
     }
     
     restoreState = (state) => {
         // Clear current SVG content
-        this.ui.canvas.svg.innerHTML = '<defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><polygon points="0 0, 10 3, 0 6" fill="#666" /></marker></defs>';
+        this.ui.canvas.clearContent();
         
-        // Restore data
-        this.points = deepClone(state.points);
-        this.bisectedAngles = new Set(state.bisectedAngles);
+        // Restore data - round coordinates to prevent decimal values
+        this.points = state.points.map(p => ({
+            ...p,
+            x: Math.round(p.x),
+            y: Math.round(p.y)
+        }));
+        // Don't restore bisectedAngles yet - wait until after angles are created
         this.linkedAngles = new Map(state.linkedAngles);
         
         // Rebuild pointsMap for O(1) lookups
@@ -1677,21 +1801,16 @@ export class Solver {
         this._batchUpdatingTriangles = true; // Prevent triangle updates during batch restore
         state.edges.forEach(edgeData => {
             // Support both old format (point1, point2) and new format (points array)
-            const pointIds = edgeData.points;
+            const pointIds = edgeData.points || [edgeData.point1, edgeData.point2];
             const point1 = this.pointsMap.get(pointIds[0]);
             const point2 = this.pointsMap.get(pointIds[1]);
-            
+
             if (point1 && point2) {
-                const line = createElement('line', {
-                    class: 'line',
-                    x1: point1.x,
-                    y1: point1.y,
-                    x2: point2.x,
-                    y2: point2.y
-                });
-                this.ui.canvas.svg.insertBefore(line, this.ui.canvas.svg.firstChild);
+                const line = renderEdge(point1, point2, edgeData.hide ? [CREATOR_ONLY_CLASS] : []);
+                this.svg.insertBefore(line, this.svg.firstChild);
                 
                 const edgeObj = {
+                    hide: edgeData.hide, 
                     points: [pointIds[0], pointIds[1]],
                     element: line
                 };
@@ -1707,71 +1826,108 @@ export class Solver {
         // Restore circles
         this.circles = [];
         state.circles.forEach(circleData => {
-            // Support multiple formats: new (centerPoint/pointsOnLine), points array, or old (point1/point2)
-            const centerPointId = circleData.centerPoint;
-            const pointsOnLine = circleData.pointsOnLine || [];            
+            // Support multiple formats for backward compatibility
+            let centerPointId, pointsOnLine;
+            
+            if (circleData.centerPoint !== undefined) {
+                // New format
+                centerPointId = circleData.centerPoint;
+                pointsOnLine = circleData.pointsOnLine || [];
+            }
+            
+            // Also include old 'points' array if it exists
+            if (circleData.points && Array.isArray(circleData.points)) {
+                pointsOnLine = [...new Set([...pointsOnLine, ...circleData.points])];
+            }
+            
             const centerPoint = this.pointsMap.get(centerPointId);
             
             // Validate that all points on line exist
             const validPointsOnLine = pointsOnLine.filter(id => this.pointsMap.get(id));
             
             if (centerPoint) {
-                const circle = createElement('circle', {
-                    class: 'circle-shape',
-                    cx: circleData.centerX,
-                    cy: circleData.centerY,
-                    r: circleData.radius
-                });
-                this.ui.canvas.svg.appendChild(circle);
+                const circleObj = {
+                    ...circleData,
+                    pointsOnLine: validPointsOnLine,
+                    element: null // Will be set after rendering
+                };
+                if (!circleObj.hide) {
+                    circleObj.element = renderCircle(circleObj);
+                    this.svg.appendChild(circleObj.element);
+                }
                 
-                this.circles.push({
-                    centerX: circleData.centerX,
-                    centerY: circleData.centerY,
-                    radius: circleData.radius,
-                    centerPoint: centerPointId,
-                    pointsOnLine: validPointsOnLine
-                });
+                this.circles.push(circleObj);
             }
         });
         
-        // Restore angles - manually recreate only the angles that existed in the saved state
+        // Restore angles
+        // First, remove all existing angle DOM elements
+        this.angles.forEach(angle => {
+            if (angle.groupElement) {
+                angle.groupElement.remove();
+            }
+        });
+        
+        // Clear bisectedAngles temporarily to allow all angles to be recreated
+        this.bisectedAngles = new Set();
         this.angles = [];
+        
+        // Recreate ALL possible angles based on current geometry
+        // This ensures all angles are created, not just those in the saved state
+        this.recreateAllAngles();
+        
+        // Now apply saved angle properties (value, label, radius, hide, target) to the recreated angles
         state.angles.forEach(angleData => {
-            const vertex = this.pointsMap.get(angleData.pointId);
-            const point1 = angleData.sidepoints && angleData.sidepoints[0] ? 
-                this.pointsMap.get(angleData.sidepoints[0]) : null;
-            const point2 = angleData.sidepoints && angleData.sidepoints[1] ? 
-                this.pointsMap.get(angleData.sidepoints[1]) : null;
+            const angle = this.angles.find(a => 
+                isThisAngle(a, angleData.pointId, angleData.sidepoints[0], angleData.sidepoints[1])
+            );
             
-            if (vertex && point1 && point2) {
-                // Recreate the angle
-                this.createAngle(vertex, point1, point2);
-                
-                // Find the newly created angle and restore its value
-                const angle = this.angles.find(a => 
-                    isThisAngle(a, angleData.pointId, angleData.sidepoints[0], angleData.sidepoints[1])
-                );
-                
-                if (angle) {
-                    if (angleData.value) {
-                        angle.value = angleData.value;
-                        if (angle.groupElement) {
-                            const textEl = angle.groupElement.querySelector('text');
-                            if (textEl) {
-                                textEl.textContent = angleData.value + '°';
-                            }
+            if (angle) {
+                if (angleData.value) {
+                    angle.value = angleData.value;
+                    if (angle.groupElement) {
+                        const textEl = angle.groupElement.querySelector('text');
+                        if (textEl) {
+                            textEl.textContent = angleData.value + '°';
                         }
                     }
-                    if (angleData.id) {
-                        angle.id = angleData.id;
+                }
+                if (angleData.name) {
+                    angle.name = angleData.name;
+                }
+                if (angleData.label !== undefined) {
+                    angle.label = angleData.label;
+                }
+                if (angleData.radius) {
+                    angle.radius = angleData.radius;
+                    // Redraw the arc with the new radius
+                    this.redrawAngleArc(angle);
+                }
+                // Handle target property
+                if (angleData.target) {
+                    angle.target = true;
+                    if (angle.groupElement) {
+                        angle.groupElement.classList.add('target-angle');
                     }
-                    if (angleData.radius) {
-                        angle.radius = angleData.radius;
-                        // Note: Arc is already drawn with correct radius during angle creation
+                }
+                // Handle hide property
+                if (angleData.hide) {
+                    angle.hide = true;
+                    if (angle.groupElement) {
+                        angle.groupElement.classList.add('hide');
                     }
                 }
             }
         });
+        
+        // Now restore bisectedAngles after all angles are created
+        this.bisectedAngles = new Set(state.bisectedAngles);
+
+        // Restore lines
+        this.lines = state.lines ? deepClone(state.lines) : [];
+
+        // Restore definitions
+        this.definitions = state.definitions ? deepClone(state.definitions) : [];
         
         this.selectedPoints = [];
         this._batchUpdatingTriangles = false; // Re-enable triangle updates
@@ -1806,7 +1962,7 @@ export class Solver {
     
     clear = () => {
         if (confirm('Clear all elements?')) {
-            this.ui.canvas.svg.innerHTML = '<defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><polygon points="0 0, 10 3, 0 6" fill="#666" /></marker></defs>';
+            this.ui.canvas.clearContent();
             this.points = [];
             this.circles = [];
             this.edges = [];
@@ -1829,7 +1985,7 @@ export class Solver {
         this.showPointNames = !this.showPointNames;
         
         // Update all point text elements
-        this.ui.canvas.svg.querySelectorAll('.point-label').forEach(label => {
+        this.svgGroup.point.querySelectorAll('.point-label').forEach(label => {
             label.style.display = this.showPointNames ? 'block' : 'none';
         });
         
@@ -1847,39 +2003,6 @@ export class Solver {
         this.saveState();
     }
 
-    checkPointOnCircles = (point) => {
-        // Check if the point is on any circle's border (within 5 pixels threshold)
-        const threshold = 5;
-        
-        this.circles.forEach(circle => {
-            // Skip if the point is already in the pointsOnLine array
-            if (circle.pointsOnLine && circle.pointsOnLine.includes(point.id)) {
-                return;
-            }
-            
-            // Skip if the point is the center point
-            if (circle.centerPoint === point.id) {
-                return;
-            }
-            
-            // Calculate distance from point to circle border
-            const distanceFromCenter = Math.sqrt(
-                Math.pow(point.x - circle.centerX, 2) + 
-                Math.pow(point.y - circle.centerY, 2)
-            );
-            
-            const distanceFromBorder = Math.abs(distanceFromCenter - circle.radius);
-            
-            // If point is on or very close to the circle border
-            if (distanceFromBorder <= threshold) {
-                if (!circle.pointsOnLine) {
-                    circle.pointsOnLine = [];
-                }
-                circle.pointsOnLine.push(point.id);
-            }
-        });
-    }
-
     loadData = (rawData) => {
         // Deserialize and normalize the data
         const data = deserializeGeometryData(rawData);
@@ -1893,7 +2016,7 @@ export class Solver {
         }
         
         // Clear current state
-        this.ui.canvas.svg.innerHTML = '<defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><polygon points="0 0, 10 3, 0 6" fill="#666" /></marker></defs>';
+        this.ui.canvas.clearContent();
         const {
             adjacentPoints,
             angles,
@@ -1938,31 +2061,17 @@ export class Solver {
             const point1 = this.pointsMap.get(pointIds[0]);
             const point2 = this.pointsMap.get(pointIds[1]);
             // Rebuild adjacentPoints map
-            const classes = ['line'];
-            if (edge.hide) classes.push('hide');
-            const line = createElement('line', {
-                class: classes,
-                x1: point1.x,
-                y1: point1.y,
-                x2: point2.x,
-                y2: point2.y
-            });
+            const line = renderEdge(point1, point2, edge.hide ? ['hide'] : []);
             this.ui.canvas.svg.insertBefore(line, this.ui.canvas.svg.firstChild);
             edge.element = line;
         });
         
         // Restore circles
         this.circles.forEach(circle => {
-            // Draw circle
-            const classes = ['circle-shape'];
-            if (circle.hide) classes.push('hide');
-            const circleElement = createElement('circle', {
-                class: classes,
-                cx: circle.centerX,
-                cy: circle.centerY,
-                r: circle.radius
-            });
-            this.ui.canvas.svg.appendChild(circleElement);
+            if (!circle.hide) {
+                circle.element = renderCircle(circle);
+                this.ui.canvas.svg.appendChild(circle.element);
+            }
         });
      
         // Restore angles - manually recreate only the angles that existed in the saved data
@@ -1989,33 +2098,10 @@ export class Solver {
         }
         
         // Create the new point
-        const pointName = getNewPointName(this.points.length);
-        const newPoint = {
-            id: pointName,
-            x: newX,
-            y: newY
-        };
-        this.addPoint(newPoint);
-        this.drawPoint(newPoint);
+        const newPoint = this.createPoint(newX, newY);
         
         // Create edge between points
-        const line = createElement('line', {
-            class: 'line',
-            x1: fromPoint.x,
-            y1: fromPoint.y,
-            x2: newPoint.x,
-            y2: newPoint.y
-        });
-        this.svg.insertBefore(line, this.svg.firstChild);
-        
-        this.edges.push({
-            points: [fromPoint.id, newPoint.id],
-            element: line
-        });
-        
-        // Update adjacency map for the new edge
-        this.addAdjacentPoint(fromPoint.id, newPoint.id);
-        this.addAdjacentPoint(newPoint.id, fromPoint.id);
+        this.createEdge(fromPoint.id, newPoint.id);
         
         // Check if the new point should be added to ANY existing lines (based on position)
         // This handles multiple lines through the same point (e.g., vertical + horizontal)
@@ -2023,10 +2109,10 @@ export class Solver {
         
         // Check if we should CREATE a new line with adjacent points
         // Find if fromPoint is in any existing line
-        const existingLine = this.lines.find(line => line.includes(fromPoint.id));
+        const existingLine = this.lines.find(line => line.points.includes(fromPoint.id));
         
         // Only try to create new lines if newPoint wasn't added to fromPoint's line
-        let addedToExistingLine = existingLine && existingLine.includes(newPoint.id);
+        let addedToExistingLine = existingLine && existingLine.points.includes(newPoint.id);
         
         // If not added to existing line, check if we should CREATE a new line
         // This handles the case where fromPoint is in one line (e.g., vertical)
@@ -2039,9 +2125,7 @@ export class Solver {
                 if (adjacentId === newPoint.id) continue; // Skip the edge we just created
                 
                 // Skip if this adjacent point is already in a line with fromPoint and newPoint
-                const alreadyInLine = this.lines.some(line => 
-                    line.includes(fromPoint.id) && line.includes(adjacentId) && line.includes(newPoint.id)
-                );
+                const alreadyInLine = this.lines.some(line => isPointsOnSameLine(line, fromPoint.id, adjacentId, newPoint.id));
                 if (alreadyInLine) continue;
                 
                 const adjacentPoint = this.pointsMap.get(adjacentId);
@@ -2049,22 +2133,8 @@ export class Solver {
                 
                 // Check if fromPoint, newPoint, and adjacentPoint are collinear using existing helper
                 if (arePointsCollinearByPosition(fromPoint, newPoint, adjacentPoint, 1)) {
-                    // They're collinear! Create a new line with proper ordering
-                    const linePoints = [fromPoint, newPoint, adjacentPoint];
-                    
-                    // Sort by x-coordinate (or y if all x are same)
-                    linePoints.sort((a, b) => {
-                        if (Math.abs(a.x - b.x) > 1) {
-                            // Sort by x-coordinate
-                            return a.x - b.x;
-                        } else {
-                            // If x is same (vertical line), sort by y-coordinate
-                            return a.y - b.y;
-                        }
-                    });
-                    
-                    const newLine = linePoints.map(p => p.id);
-                    this.addLine(newLine);
+                    const newLinePoints = sortLinePoints([fromPoint, newPoint, adjacentPoint], this.pointsMap);
+                    this.addLine(newLinePoints);
                     break; // Only create one line per new point
                 }
             }

@@ -1,5 +1,8 @@
+import { deepClone } from "./objectHelper.mjs";
+
 // Math helper functions for geometry calculations
 const TOLERANCE = 10;
+const DETECTION_THRESHOLD = 3;
 
 // Generates a point name from an index (A, B, C, ..., Z, then wraps back to A).
 export function getNewPointName(index) {
@@ -8,6 +11,29 @@ export function getNewPointName(index) {
 
 export const getAngleNameFromPoints = (vertexId, point1Id, point2Id) => {
     return `∠${point1Id}${vertexId}${point2Id}`;
+}
+
+export const extendLine = (p1, p2, maxWidth, maxHeight) => {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    const ux = dx / len;
+    const uy = dy / len;
+    const ext = Math.sqrt(maxWidth ** 2 + maxHeight ** 2);
+
+    return {
+        x1: p1.x - ux * ext,
+        y1: p1.y - uy * ext,
+        x2: p2.x + ux * ext,
+        y2: p2.y + uy * ext,
+    };
+}
+
+export const isPointOnLineDistance = (x1, y1, x2, y2, px, py, threshold = DETECTION_THRESHOLD) => {
+    const numerator = Math.abs((y2 - y1) * px - (x2 - x1) * py + x2*y1 - y2*x1);
+    const denominator = Math.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2);
+    const distance = numerator / denominator;
+    return distance <= threshold;
 }
 
 // Calculates Euclidean distance between two points (x1, y1) and (x2, y2).
@@ -195,9 +221,9 @@ export function degreesToRadians(degrees) {
 export function arePointsCollinear(pointId1, pointId2, pointId3, lines) {
     // Check if all 3 points exist in any line array
     return lines.some(line => 
-        line.includes(pointId1) && 
-        line.includes(pointId2) && 
-        line.includes(pointId3)
+        line.points.includes(pointId1) && 
+        line.points.includes(pointId2) && 
+        line.points.includes(pointId3)
     );
 }
 
@@ -212,7 +238,7 @@ export function arePointsCollinear(pointId1, pointId2, pointId3, lines) {
  * @param {Map<string, Object>} pointsMap - Map of point IDs to point objects with x, y coordinates
  * @returns {Array} Array of overlapping angle objects
  */
-export function findOverlappingAngles(vertexId, neighbor1Id, neighbor2Id, angles, lines, pointsMap) {
+export function findOverlappingAngles(vertexId, neighbor1Id, neighbor2Id, angles, lines) {
     return angles.filter(existingAngle => {
         // Must have same vertex
         if (existingAngle.pointId !== vertexId) return false;
@@ -240,10 +266,10 @@ export function findOverlappingAngles(vertexId, neighbor1Id, neighbor2Id, angles
         // Find the line containing vertex and both non-shared neighbors
         let onSameSide = false;
         for (const line of lines) {
-            if (line.includes(vertexId) && line.includes(existingOtherNeighbor) && line.includes(newOtherNeighbor)) {
-                const vertexIndex = line.indexOf(vertexId);
-                const existingIndex = line.indexOf(existingOtherNeighbor);
-                const newIndex = line.indexOf(newOtherNeighbor);
+            if (line.points.includes(vertexId) && line.points.includes(existingOtherNeighbor) && line.points.includes(newOtherNeighbor)) {
+                const vertexIndex = line.points.indexOf(vertexId);
+                const existingIndex = line.points.indexOf(existingOtherNeighbor);
+                const newIndex = line.points.indexOf(newOtherNeighbor);
                 
                 // Same side: both points on same side of vertex in line array
                 const bothBefore = (existingIndex < vertexIndex && newIndex < vertexIndex);
@@ -350,6 +376,157 @@ export function isPointOnCircle(point, centerPoint, radius, threshold = 5) {
 }
 
 /**
+ * Check if a point is strictly between two edge endpoints (not at endpoints)
+ * @param {Object} point - Test point with x, y properties
+ * @param {Object} edgePoint1 - First edge endpoint with x, y properties
+ * @param {Object} edgePoint2 - Second edge endpoint with x, y properties
+ * @param {number} threshold - Distance tolerance (default 1)
+ * @returns {boolean} True if point is strictly between the edge endpoints
+ */
+export function isPointBetweenEdgePoints(point, edgePoint1, edgePoint2, threshold = DETECTION_THRESHOLD) {
+    // Check distance to segment
+    const { distance: distToSegment } = pointToSegmentDistance(
+        point.x, point.y, 
+        edgePoint1.x, edgePoint1.y, 
+        edgePoint2.x, edgePoint2.y
+    );
+    
+    // Not on the edge segment
+    if (distToSegment > threshold) {
+        return false;
+    }
+    
+    // Check it's not at either endpoint
+    const distToP1 = distance(point.x, point.y, edgePoint1.x, edgePoint1.y);
+    const distToP2 = distance(point.x, point.y, edgePoint2.x, edgePoint2.y);
+    
+    return distToP1 > threshold && distToP2 > threshold;
+}
+
+export const isPointsOnSameLine = (line, ...points) => {
+    return points.every(pointId => line.points.includes(pointId));
+}
+
+export const isEdgeOnThisLine = (edge, line) => {
+    return isPointsOnSameLine(line, edge.points[0], edge.points[1]);
+}
+
+/**
+ * Insert a point between a pair of points on a line if it doesn't already exist
+ * @param {Object} line - Line object with points property (array of point IDs)
+ * @param {Array} pairPointIds - Array with 2 point IDs [pointId1, pointId2] between which to insert
+ * @param {string} pointId - Point ID to insert
+ * @returns {boolean} True if point was inserted, false if already exists or pair not found
+ */
+export function insertPointBetweenEdgePointsInLine(line, edgePoints, pointId) {
+    if (!line || !line.points || !Array.isArray(edgePoints) || edgePoints.length !== 2) {
+        return false;
+    }
+    
+    const [pairId1, pairId2] = edgePoints;
+    
+    // Check if point already exists on the line
+    if (line.points.includes(pointId)) {
+        return false;
+    }
+    
+    // Find the indices of the pair points
+    const index1 = line.points.indexOf(pairId1);
+    const index2 = line.points.indexOf(pairId2);
+    
+    // Both points must exist on the line
+    if (index1 === -1 || index2 === -1) {
+        return false;
+    }
+    
+    // Points must be adjacent (next to each other)
+    if (Math.abs(index1 - index2) !== 1) {
+        return false;
+    }
+    
+    // Insert after the smaller index (between the two points)
+    const insertIndex = Math.min(index1, index2) + 1;
+    line.points.splice(insertIndex, 0, pointId);
+    
+    return true;
+}
+
+export const getHighlightableElements = ({
+    lines,
+    edges,
+    circles,
+    pointsMap
+}, point) => {
+    // internal data
+    const result = {
+        edges: [],
+        circles: [],
+        lines: [],
+        intersectedEdges: []
+    };
+
+    const edgesGroupByName = new Map();
+    const pointPairs = new Map();
+
+    const createKey = (p1, p2) => [p1, p2].sort().join('-');
+    edges.forEach(edge => {
+        const lineWithThisEdge = lines.find(line => isEdgeOnThisLine(edge, line));
+        let point1Id, point2Id;
+        if (lineWithThisEdge) {
+            point1Id = lineWithThisEdge.points[0];
+            point2Id = lineWithThisEdge.points[lineWithThisEdge.points.length - 1];
+        } else {
+            point1Id = edge.points[0];
+            point2Id = edge.points[1];
+        }
+        const key = createKey(edge.points[0], edge.points[1]);
+
+        if (!edgesGroupByName.has(key)) { 
+            edgesGroupByName.set(key, []);
+        }
+        edgesGroupByName.get(key).push(edge);
+
+        if (!pointPairs.has(key)) {
+            pointPairs.set(key, {
+                point1: pointsMap.get(point1Id),
+                point2: pointsMap.get(point2Id),
+                lineId: lineWithThisEdge?.id
+            });
+        }
+
+        // point, edgePoint1, edgePoint2, threshold = 1
+        const [edgePoint1, edgePoint2] = edge.points.map(p => pointsMap.get(p));
+        if (isPointBetweenEdgePoints(point, edgePoint1, edgePoint2)) {
+            result.intersectedEdges = edge.id;
+        }
+    });
+
+    pointPairs.forEach(({ point1, point2, lineId }, key) => {
+        const { x1, y1, x2, y2 } = extendLine(point1, point2, 1920, 1080);
+        const mouseAtThisLine = isPointOnLineDistance(x1, y1, x2, y2, point.x, point.y);
+        const edgesForThisLine = edgesGroupByName.get(key);
+        edgesForThisLine.forEach(edge => {
+            if (mouseAtThisLine) {
+                result.edges.push(edge.id);
+                if (lineId && !result.lines.includes(lineId)) {
+                    result.lines.push(lineId);
+                }
+            }
+        });
+    });
+
+    circles.forEach(circle => {
+        const centerPoint = pointsMap.get(circle.centerPoint);
+        const onCircle = isPointOnCircle(point, centerPoint, circle.radius, 3);
+        if (onCircle) {
+            result.circles.push(circle.id);
+        }
+    });
+
+    return result;
+};
+
+/**
  * Check if three points are collinear using cross product
  * (Alternative to line-based collinearity check, uses geometric calculation)
  * @param {Object} p1 - First point with x, y properties
@@ -420,10 +597,10 @@ export const areAnglesOverlapping = (angle1, angle2, lines) => {
         // Check if the points are collinear
         for (const line of lines) {
             // CASE 1: Vertex is on the line with both non-common neighbors
-            if (line.includes(vertex) && line.includes(nonCommon1) && line.includes(nonCommon2)) {
-                const vertexIndex = line.indexOf(vertex);
-                const index1 = line.indexOf(nonCommon1);
-                const index2 = line.indexOf(nonCommon2);
+            if (line.points.includes(vertex) && line.points.includes(nonCommon1) && line.points.includes(nonCommon2)) {
+                const vertexIndex = line.points.indexOf(vertex);
+                const index1 = line.points.indexOf(nonCommon1);
+                const index2 = line.points.indexOf(nonCommon2);
                 
                 // For overlapping angles, both non-common neighbors must be on the SAME side
                 const onSameSide = (index1 < vertexIndex && index2 < vertexIndex) || 
@@ -483,11 +660,11 @@ export const areAnglesLinearPair = (angle1, angle2, lines) => {
         
         // Check if the three points are collinear
         for (const line of lines) {
-            if (line.includes(vertex) && line.includes(nonCommon1) && line.includes(nonCommon2)) {
+            if (line.points.includes(vertex) && line.points.includes(nonCommon1) && line.points.includes(nonCommon2)) {
                 // They're collinear - now check if they're on OPPOSITE sides of the vertex
-                const vertexIndex = line.indexOf(vertex);
-                const index1 = line.indexOf(nonCommon1);
-                const index2 = line.indexOf(nonCommon2);
+                const vertexIndex = line.points.indexOf(vertex);
+                const index1 = line.points.indexOf(nonCommon1);
+                const index2 = line.points.indexOf(nonCommon2);
                 
                 // For a linear pair, the two non-common neighbors must be on opposite sides
                 // i.e., one before vertex, one after vertex in the line array
@@ -500,9 +677,10 @@ export const areAnglesLinearPair = (angle1, angle2, lines) => {
         return false;
     };
 
+export const isTargetAngle = (angle) => !!angle.target;
+export const isSolvedTargetAngle = (angle) => isTargetAngle(angle) && isSolvedAngle(angle);
 export const getAngleDisplayText = (angle) => {
-    // Priority: value > label > '?'
-    if (angle.value && angle.value !== '?') {
+    if (angle.value) {
         const isGreekLetter = isNaN(parseFloat(angle.value));
         return isGreekLetter ? angle.value : angle.value + '°';
     }
@@ -700,7 +878,7 @@ export const areAllTrianglesValid = (triangles, angles) => {
  * @returns {number|null} Parsed numeric value or null if not available
  */
 export function getAngleValue(angle) {
-    if (!angle.value || angle.value === '?') return null;
+    if (!angle.value) return null;
     const parsed = parseFloat(angle.value);
     if (isNaN(parsed)) return null;
     return parsed || null;
@@ -797,7 +975,7 @@ export const isAngleInTriangleByEdges = (vertexId, point1Id, point2Id, adjacentP
     return point1Neighbors.has(point2Id) && vertexNeighbors.has(point1Id) && vertexNeighbors.has(point2Id);
 }
 
-export const getTriangles = (angles, adjacentPoints, lines, pointsMap) => {
+export const getTriangles = (angles, adjacentPoints, lines) => {
     // Clear existing triangles
     const triangles = [];
     
@@ -825,7 +1003,7 @@ export const getTriangles = (angles, adjacentPoints, lines, pointsMap) => {
                 if (hasEdge12 && hasEdge13 && hasEdge23) {
                     // Check if the three points are collinear - if so, skip (not a valid triangle)
                     const areCollinear = lines.some(line => 
-                        line.includes(p1) && line.includes(p2) && line.includes(p3)
+                        line.points.includes(p1) && line.points.includes(p2) && line.points.includes(p3)
                     );
                     
                     if (!areCollinear) {
@@ -842,20 +1020,20 @@ export const getTriangles = (angles, adjacentPoints, lines, pointsMap) => {
     // When points are collinear, they're implicitly connected
     // So: apex point (not on line) + any 2 points from line = valid triangle
     lines.forEach(line => {
-        if (line.length < 2) return; // Need at least 2 points on the line
+        if (line.points.length < 2) return; // Need at least 2 points on the line
         
         // Find all points NOT on this line (potential apex points)
-        const apexPoints = pointIds.filter(pointId => !line.includes(pointId));
+        const apexPoints = pointIds.filter(pointId => !line.points.includes(pointId));
         
         // For each apex point
         apexPoints.forEach(apex => {
             const apexAdjacent = adjacentPoints.get(apex) || new Set();
             
             // For each pair of points on the collinear line
-            for (let i = 0; i < line.length; i++) {
-                for (let j = i + 1; j < line.length; j++) {
-                    const linePoint1 = line[i];
-                    const linePoint2 = line[j];
+            for (let i = 0; i < line.points.length; i++) {
+                for (let j = i + 1; j < line.points.length; j++) {
+                    const linePoint1 = line.points[i];
+                    const linePoint2 = line.points[j];
                     
                     // Check if apex has edges to both points on the line
                     const hasEdgeToP1 = apexAdjacent.has(linePoint1);
@@ -891,7 +1069,7 @@ export const getTriangles = (angles, adjacentPoints, lines, pointsMap) => {
             );
             
             // Check if vertex is on a line (supplementary angle)
-            const isSupplementaryAngle = lines.some(line => line.includes(angle.pointId));
+            const isSupplementaryAngle = lines.some(line => line.points.includes(angle.pointId));
             
             // Check if it should still be hidden due to overlap
             const overlappingAngles = findOverlappingAngles(
@@ -899,8 +1077,7 @@ export const getTriangles = (angles, adjacentPoints, lines, pointsMap) => {
                 angle.sidepoints[0], 
                 angle.sidepoints[1], 
                 angles.filter(a => a.id !== angle.id), 
-                lines, 
-                pointsMap
+                lines
             );
             const hasOverlap = overlappingAngles.length > 0;
             
@@ -967,10 +1144,10 @@ export function buildOverlappingAnglesMap(angles, lines, overlappingAngles) {
             // Check if they're on the same side (overlapping) or opposite sides (supplementary)
             let onSameSide = false;
             for (const line of lines) {
-                if (line.includes(angle.pointId) && line.includes(angleOtherNeighbor) && line.includes(otherAngleOtherNeighbor)) {
-                    const vertexIndex = line.indexOf(angle.pointId);
-                    const index1 = line.indexOf(angleOtherNeighbor);
-                    const index2 = line.indexOf(otherAngleOtherNeighbor);
+                if (line.points.includes(angle.pointId) && line.points.includes(angleOtherNeighbor) && line.points.includes(otherAngleOtherNeighbor)) {
+                    const vertexIndex = line.points.indexOf(angle.pointId);
+                    const index1 = line.points.indexOf(angleOtherNeighbor);
+                    const index2 = line.points.indexOf(otherAngleOtherNeighbor);
                     
                     // Same side: both points on same side of vertex in line array
                     // Both before vertex OR both after vertex
@@ -1044,11 +1221,11 @@ export const isSameRay = (p1, p2, vertex, lines) => {
     
     // Same ray = both points on same side of vertex in a line
     for (const line of lines) {
-        if (!line.includes(vertex) || !line.includes(p1) || !line.includes(p2)) continue;
+        if (!line.points.includes(vertex) || !line.points.includes(p1) || !line.points.includes(p2)) continue;
         
-        const vi = line.indexOf(vertex);
-        const i1 = line.indexOf(p1);
-        const i2 = line.indexOf(p2);
+        const vi = line.points.indexOf(vertex);
+        const i1 = line.points.indexOf(p1);
+        const i2 = line.points.indexOf(p2);
         
         // Both before OR both after vertex = same ray
         if ((i1 < vi && i2 < vi) || (i1 > vi && i2 > vi)) {
@@ -1110,6 +1287,29 @@ export const findSameAnglesGroups = (angles, lines) => {
     }
     return angleGroups;
 };
+
+export const isSolvedAngle = (angle) => angle.value;
+export const isUnsolvedAngle = (angle) => !isSolvedAngle(angle);
+export const getAnglesNeedToBeSolved = (angles) => {
+    return angles.filter(angle => isTargetAngle(angle));
+}
+
+export const getAnglesAlreadySolved = (angles) => {
+    return angles.filter(a => isSolvedAngle(a));
+}
+
+export const sortLinePoints = (line, pointsMap) => {
+    const linePoints = line.map(id => pointsMap.get(id)).filter(p => p);                
+    linePoints.sort((a, b) => {
+        if (Math.abs(a.x - b.x) > 1) {
+            return a.x - b.x;
+        } else {
+            return a.y - b.y;
+        }
+    });
+
+    return linePoints.map(x => x.id);
+}
 
 export const increaseAngleRadius = (currentPath, increaseBy) => {
     const arcMatch = currentPath.match(/A\s+([\d.]+)\s+([\d.]+)/);

@@ -35,13 +35,21 @@ body {
 /* SVG Elements - Points */
 .point-group {
     cursor: pointer;
+    pointer-events: auto;
+}
+
+.point-group.creator-only {
+    opacity: 0.5;
+}
+
+body.solver-mode .point-group.creator-only {
+    display: none;
 }
 
 .point-circle {
     fill: #3498db;
     stroke: #2980b9;
     stroke-width: 2;
-    transition: all 0.2s;
 }
 
 .point-circle:hover {
@@ -76,37 +84,72 @@ body {
     fill: none;
     stroke: #95a5a6;
     stroke-width: 2;
-    /* stroke-dasharray: 5,5; */
+}
+
+.circle-shape.creator-only {
+    stroke-dasharray: 5,5;
+}
+
+body.solver-mode .circle-shape.creator-only {
+    display: none;
+}
+
+[tool="addPoint"] .mouse-on-this-element.circle-shape,
+[tool="hideElement"] .mouse-on-this-element.circle-shape
+{
+    stroke-width: 3;
+    stroke: #2c3e50;
+    cursor: cell;
 }
 
 /* SVG Elements - Lines */
-.line {
+.edge {
     stroke: #34495e;
     stroke-width: 2;
     pointer-events: stroke;
-    cursor: pointer;
     transition: stroke-width 0.2s;
 }
 
-.line:hover {
+.edge.creator-only {
+    stroke-dasharray: 5,5;
+}
+
+body.solver-mode .edge.creator-only {
+    display: none;
+}
+
+[tool="addPoint"] .edge:hover,
+[tool="hideElement"] .edge:hover,
+[tool="addPoint"] .mouse-on-this-element .edge
+{
+    cursor: cell;
     stroke-width: 4;
     stroke: #2c3e50;
 }
 
-.line.diameter {
+.edge.helper {
+    display: none;
+}
+.mouse-on-this-element .edge.helper {
+    display: block;
+    stroke: #ccc;
+    stroke-width: 2;
+}
+
+.edge.diameter {
     stroke: #bdc3c7;
     stroke-width: 1.5;
     stroke-dasharray: 3,3;
 }
 
-.line.radius-line {
+.edge.radius-line {
     stroke: #3498db;
     stroke-width: 1.5;
     stroke-dasharray: 5,5;
     pointer-events: none;
 }
 
-.line.bisector {
+.edge.bisector {
     stroke: #e67e22;
     stroke-width: 2;
     stroke-dasharray: 5,5;
@@ -126,10 +169,24 @@ body {
     transition: all 0.2s;
 }
 
-.angle-arc:hover,
-.angle-group:hover .angle-arc {
+body:not(.solver-mode) .angle-arc:hover,
+body:not(.solver-mode) .angle-group:hover .angle-arc {
     fill: rgba(52, 152, 219, 0.8);
     stroke-width: 3;
+}
+
+body:not(.solver-mode) .target-angle .angle-arc:hover,
+body:not(.solver-mode) .angle-group.target-angle:hover .angle-arc {
+    fill: rgba(230, 140, 30, 0.8);
+}
+
+.angle-group.creator-only {
+    opacity: 0.5;
+    filter: grayscale(1);
+}
+
+body.solver-mode .angle-group.creator-only {
+    display: none;
 }
 
 .angle-text {
@@ -143,12 +200,18 @@ body {
     transition: opacity 0.2s;
 }
 
-.angle-text:hover,
-.angle-group:hover .angle-text,
-.final-angle .angle-text {
+body:not(.solver-mode) .angle-text:hover,
+body:not(.solver-mode) .angle-group:hover .angle-text,
+.target-angle .angle-text {
     fill: black;
     opacity: 1;
     font-weight: bold;
+    font-size: 18px;
+}
+
+.target-angle .angle-arc {
+    fill: rgba(255, 165, 52, 0.8);
+    stroke: #db9834;
 }
 
 /* Angle Input Popup */

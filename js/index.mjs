@@ -15,6 +15,7 @@ if (typeof document !== 'undefined') {
     }
     const initialProblem = params.get('problem') || null;
     document.addEventListener('DOMContentLoaded', () => {
+        document.body.classList.add(`${mode}-mode`);
         if (mode === TOOL_MODE.CREATOR) {
             window.tool = new Creator();
         } else {

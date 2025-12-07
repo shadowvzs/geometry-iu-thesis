@@ -33,16 +33,34 @@ export class Canvas {
                     ['marker', { id: 'arrowhead', markerWidth: '10', markerHeight: '10', refX: '9', refY: '3', orient: 'auto' }, [
                         ['polygon', { points: '0 0, 10 3, 0 6', fill: '#666' }]
                     ]]
-                ]]
+                ]],
+                ['g', { class: 'svg-group', ['data-group-id']: 'circle' }, []],
+                ['g', { class: 'svg-group', ['data-group-id']: 'edge' }, []],
+                ['g', { class: 'svg-group', ['data-group-id']: 'angle' }, []],
+                ['g', { class: 'svg-group', ['data-group-id']: 'point' }, []],
             ]]
         ]);
 
         this.svg = this.container.querySelector('#geometryCanvas');
+        this.svgGroup = {
+            circle: this.svg.querySelector('g[data-group-id="circle"].svg-group'),
+            edge: this.svg.querySelector('g[data-group-id="edge"].svg-group'),
+            angle: this.svg.querySelector('g[data-group-id="angle"].svg-group'),
+            point: this.svg.querySelector('g[data-group-id="point"].svg-group'),
+        };
+        this.baseInnerHTML = this.svg.innerHTML;
                 
         // Subscribe to UI requests
         this.setupSubscriptions();
 
         return this.container;
+    }
+
+    clearContent = () => {
+        this.svgGroup.circle.innerHTML = '';
+        this.svgGroup.edge.innerHTML = '';
+        this.svgGroup.angle.innerHTML = '';
+        this.svgGroup.point.innerHTML = '';
     }
 
     // Point Menu Popover
@@ -207,7 +225,7 @@ export class Canvas {
             this.messagingHub.emit(Messages.STATUS_UPDATED, `Moving ${point.id} along ${angleDegrees}° - drag to move, click to finish`);
             
             // Find the point's SVG group and circle element
-            const pointGroup = this.svg.querySelector(`g[data-point-id="${point.id}"]`);
+            const pointGroup = this.svg.querySelector(`g[data-pointId="${point.id}"]`);
             const pointElement = pointGroup?.querySelector('.point-circle');
             if (!pointGroup || !pointElement) {
                 this.messagingHub.emit(Messages.STATUS_UPDATED, '❌ Could not find point element');
@@ -373,18 +391,26 @@ export class Canvas {
         });
         valueField.value = angleData.value || '';
         
-        // Add question mark button for "to be solved"
-        const questionMarkBtn = createElement('button', {
-            class: 'greek-letter-btn',
-            'data-letter': '?',
-            title: 'Mark as unknown (to be solved)',
-            style: 'margin: 0;'
-        }, ['?']);
+        const checkboxElement = createElement('input', {
+            type: 'checkbox',
+            title: 'Select as target angle'
+        });
+        const targetAngle = createElement('label', { class: 'target-angle-label' }, [
+            checkboxElement,
+            ' Target'
+        ]);
         
+        // Question mark button handler
+        checkboxElement.addEventListener('input', (e) => {
+            angleData.target = checkboxElement.checked;
+            angleData.groupElement.classList.toggle('target-angle');
+            autoSave();
+        });
+
         // Create value row container with flex
         const valueRow = createElement('div', {
-            style: 'display: flex; flex-direction: row; gap: 8px; align-items: center;'
-        }, [valueField, questionMarkBtn]);
+            style: 'display: flex; flex-direction: row; gap: 32px; align-items: center;'
+        }, [valueField, targetAngle]);
         
         const radiusField = createElement('input', {
             type: 'number',
@@ -457,14 +483,6 @@ export class Canvas {
                 autoSave();
                 labelField.focus();
             }
-        });
-        
-        // Question mark button handler
-        questionMarkBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            valueField.value = '?';
-            autoSave();
-            valueField.focus();
         });
         
         // Auto-save on input change
