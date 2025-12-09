@@ -237,6 +237,10 @@ export class Solver extends GeometryTool {
     initProblem = () => {
         const data = deserializeStateFromUrl(this.initialProblem);
         if (data) {
+            // hide all angle without value or if it is not a target
+            data.angles
+                .filter(angle => Boolean(angle.t || angle.v === null || angle.v === undefined))
+                .forEach(angle => { angle.h = 1; });
             this.loadData(data);
         }
 
@@ -247,7 +251,8 @@ export class Solver extends GeometryTool {
             lines: this.lines,
             points: this.points,
             triangles: this.triangles.map(tri => Array.from(tri)),
-            circles: this.circles
+            circles: this.circles,
+            adjacentPoints: this.adjacentPoints
         });
 
         const { solved, score } = solve(clonedData, {

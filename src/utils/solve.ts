@@ -21,6 +21,7 @@ export interface SolveData {
     lines: Line[];
     triangles: Triangle[] | string[][];
     circles: Circle[];
+    adjacentPoints: Map<string, Set<string>>;
 }
 
 export interface SolveOptions {
@@ -39,8 +40,11 @@ export interface SolveResult {
 
 type SolverMethod = (data: SolveDataWithMaps, log: SolveOptions['setAngle']) => boolean;
 
+type Equation = string;
+
 interface SolveDataWithMaps extends SolveData {
     angleMapsByPointId: Record<string, Angle[]>;
+    equations: Equation[];
 }
 
 const scores: Record<string, number> = {
@@ -53,18 +57,21 @@ const scores: Record<string, number> = {
 };
 
 export const solve = (
-    { angles, points, lines, triangles, circles }: SolveData, 
+    { angles, points, lines, triangles, circles, adjacentPoints }: SolveData, 
     { setAngle, maxIterations = 100 }: SolveOptions
 ): SolveResult => {
     const startTime = performance.now();
+    const equations: Equation[] = [];
 
     const data: SolveDataWithMaps = {
+        adjacentPoints,
         angles,
         angleMapsByPointId: getAngleMapsByPointId(angles),
-        points,
-        lines,
-        triangles,
         circles,
+        lines,
+        points,
+        triangles,
+        equations
     };
 
     const anglesNeedToBeSolved = getAnglesNeedToBeSolved(angles);
@@ -74,11 +81,11 @@ export const solve = (
 
     const angleSolverMethods: SolverMethod[] = [
         applySameLabelAngles,
+        applySameAngles,
         applySupplementaryAngles,
         applyTriangleAngleSum,
         applyComposedAngles,
         applyMirrorAngle,
-        applySameAngles,
     ];
 
     while (changesMade && iterations < maxIterations) {

@@ -15,7 +15,7 @@ interface SolveData {
 
 type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
 
-export const applySameAngles = ({ angleMapsByPointId, lines }: SolveData, log: LogFn): boolean => {
+export const applySameAngles = ({ angleMapsByPointId, lines, equations }: SolveData, log: LogFn): boolean => {
     let changesMade = false;
 
     Object.keys(angleMapsByPointId).forEach(vertex => {
@@ -31,16 +31,26 @@ export const applySameAngles = ({ angleMapsByPointId, lines }: SolveData, log: L
         
         sameAnglesGroups.forEach(sameAngles => {
             const knownAngle = sameAngles.find(angle => getAngleValue(angle));
-            if (!knownAngle) { return; }
-            
-            sameAngles.forEach(angle => {
-                if (getAngleValue(angle)) {
-                    return;
-                }
-                angle.value = knownAngle.value;
-                log(angle, `same angle ${angle.name} has value ${knownAngle.value}° by same angles group`, 'applySameAngles');
-                changesMade = true;
-            });
+            const label = sameAngles.find(angle => angle.label);
+
+            if (label) {
+                sameAngles
+                    .filter(angle => !angle.label)
+                    .forEach(angle => {
+                        angle.label = label.label;
+                        changesMade = true;
+                    });
+            }
+            if (knownAngle) {
+                sameAngles.forEach(angle => {
+                    if (getAngleValue(angle)) {
+                        return;
+                    }
+                    angle.value = knownAngle.value;
+                    log(angle, `same angle ${angle.name} has value ${knownAngle.value}° by same angles group`, 'applySameAngles');
+                    changesMade = true;
+                });
+            }
         });
     });
     

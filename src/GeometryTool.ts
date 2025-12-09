@@ -16,7 +16,7 @@ import {
     getNewPointName,
     getSameAngleNames,
     getUnusedGreekLetter,
-    getTriangles,
+    getTriangles2,
     increaseAngleRadius,
     insertPointBetweenEdgePointsInLine,
     isEdgeOnThisLine,
@@ -1125,7 +1125,7 @@ export class GeometryTool {
     
     public updateTriangles() {
         // Clear existing triangles
-        this.triangles = getTriangles(this.angles, this.adjacentPoints, this.lines);
+        this.triangles = getTriangles2(this.angles, this.adjacentPoints, this.lines);
     }
 
     public handlePointClick(point: Point) {
@@ -1536,9 +1536,9 @@ export class GeometryTool {
         angleData.groupElement = group as HTMLElement;
       
         // Hide if shouldHide (overlapping OR not in triangle and not supplementary)
-        if (angleData.hide) {
-            group.style.display = 'none';
-        }
+        // if (angleData.hide) {
+        //     group.style.display = 'none';
+        // }
         
         const angleElements = Array.from(this.svgGroup.angle.querySelectorAll('.angle-group'));
         // push our new element to the array
@@ -1557,11 +1557,13 @@ export class GeometryTool {
         
         this.svgGroup.angle.innerHTML = '';
         this.svgGroup.angle.appendChild(fragment);
+
     }
 
     public handleAngleClick(angleData: Angle) {
         if (this.currentTool === 'pointer' || this.currentTool === 'assignAngle') {
-            this.messagingHub.emit(Messages.ANGLE_EDIT_REQUESTED, angleData);
+            const angles = this.angles.filter(angle => angle.pointId === angleData.pointId);
+            this.messagingHub.emit(Messages.ANGLE_EDIT_REQUESTED, { angle: angleData, angles });
         } else if (this.currentTool === 'angleBisector') {
             this.messagingHub.emit(Messages.ANGLE_BISECTOR_REQUESTED, angleData);
         } else {
@@ -1622,7 +1624,8 @@ export class GeometryTool {
         const isFromBisection = this.linkedAngles && this.linkedAngles.has(angleKey);
         
         // Check both calculated angle and assigned value
-        const hasValue90 = angleData.value === 90 || angleData.value === '90';
+        const angleValue = getAngleValue(angleData);
+        const hasValue90 = angleValue === 90;
         const is90Degree = hasValue90 && !isFromBisection;
         
         let pathData;
@@ -1748,7 +1751,7 @@ export class GeometryTool {
         
         // Store the original angle value (if it exists) to split it in half
         const originalAngleValue = getAngleValue(angleData);
-        const halfAngleValue = originalAngleValue ? (originalAngleValue / 2).toString() : null;
+        const halfAngleValue = originalAngleValue ? (originalAngleValue / 2) : null;
         
         // Use the specific two neighbor points from the angleData (not all neighbors)
         // This ensures we bisect the correct angle when a point has more than 2 neighbors

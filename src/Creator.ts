@@ -35,6 +35,7 @@ import type {
     UpdateAngleData
 } from './types';
 import { GeometryTool } from './GeometryTool';
+// import { testdata } from './testdata';
 
 export class Creator extends GeometryTool {
     constructor() {
@@ -53,6 +54,9 @@ export class Creator extends GeometryTool {
 
         // Save initial empty state
         this.saveState();
+
+        // for testing purpose
+        // this.loadData(testdata as unknown as SerializedGeometryData);
     }
 
     registerToolbarButtons = () => {
@@ -511,7 +515,8 @@ export class Creator extends GeometryTool {
                 lines: this.lines,
                 points: this.points,
                 triangles: this.triangles,
-                circles: this.circles
+                circles: this.circles,
+                adjacentPoints: this.adjacentPoints
             }, {
                 setAngle: setAngleCallback,
                 maxIterations: 100
@@ -557,7 +562,8 @@ export class Creator extends GeometryTool {
             lines: this.lines,
             points: this.points,
             triangles: this.triangles.map(tri => Array.from(tri)),
-            circles: this.circles
+            circles: this.circles,
+            adjacentPoints: this.adjacentPoints
         });
         const { executionTime, solved } = solve(data, {
             setAngle: () => { },
@@ -665,49 +671,31 @@ export class Creator extends GeometryTool {
         // Create serializable data (without DOM elements)
         const data = {
             points: this.points.map(point => {
-                const p: Pick<Point, 'id' | 'x' | 'y' | 'hide'> = {
-                    id: point.id,
-                    x: Math.round(point.x),
-                    y: Math.round(point.y)
-                };
-                if (point.hide) p.hide = true;
-                return p;
+                return `${point.id} (${point.x}, ${point.y})${point.hide ? ' - hide' : ''}`;
             }),
             edges: this.edges.map(edge => {
-                const e: Pick<Edge, 'points' | 'hide'> = {
-                    points: edge.points || []
-                };
-                if (edge.hide) e.hide = true;
-                return e;
+                return `${edge.points.join(',')}${edge.hide ? ' - hide' : ''}`;
             }),
             angles: this.angles.map(angle => {
-                const a: Pick<Angle, 'name' | 'pointId' | 'sidepoints' | 'value' | 'calculatedValue' | 'radius' | 'hide' | 'label'> = {
-                    name: angle.name || '',
-                    pointId: angle.pointId,
-                    sidepoints: angle.sidepoints || [],
-                    value: angle.value,
-                    calculatedValue: angle.calculatedValue,
+                const a = {
+                    name: `${angle.name}${angle.label ? ` - ${angle.label}` : ''}`,
+                    pointId: `${angle.pointId}${angle.hide ? ' - hide' : ''}`,
+                    sidepoints: `${angle.sidepoints.join(',')}`,
+                    value: angle.value ? `${angle.value}°` : '-',
                     radius: angle.radius || 30
                 };
-
-                if (angle.hide) a.hide = true;
-                if (angle.label) a.label = angle.label;
                 return a;
             }),
             circles: this.circles.map(circle => {
-                const c: Pick<Circle, 'name' | 'centerPoint' | 'centerX' | 'centerY' | 'radius' | 'pointsOnLine' | 'hide'> = {
-                    name: circle.id,
-                    centerPoint: circle.centerPoint,
-                    centerX: Math.round(circle.centerX),
-                    centerY: Math.round(circle.centerY),
+                const c = {
+                    name: `${circle.centerPoint} (${circle.centerX}, ${circle.centerY})${circle.hide ? ' - hide' : ''}`,
                     radius: Math.round(circle.radius),
-                    pointsOnLine: circle.pointsOnLine || []
+                    pointsOnLine: `${circle.pointsOnLine.join(',')}`,
                 };
-                if (circle.hide) c.hide = true;
                 return c;
             }),
-            triangles: this.triangles.map(triangle => Array.from(triangle).sort()),
-            lines: this.lines.map(line => line.points.slice()),
+            triangles: this.triangles.map(triangle => '<'+Array.from(triangle).sort().join(',')+'>'),
+            lines: this.lines.map(line => '['+line.points.slice().join(',')+']'),
             definitions: this.definitions,
         };
         

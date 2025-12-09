@@ -16,7 +16,7 @@ type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
  * Theorem: Angles with the same label have the same value
  * Used for bisected angles or any manually labeled angles
  */
-export const applySameLabelAngles = ({ angles }: SolveData, log: LogFn): boolean => {
+export const applySameLabelAngles = ({ angles, equations }: SolveData, log: LogFn): boolean => {
     const labelValueMap = new Map<string, number>();
     const unsolvedAngles: Angle[] = [];
     

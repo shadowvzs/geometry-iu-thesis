@@ -1,7 +1,8 @@
 import { createElement } from "../utils/domHelper";
 import { degreesToRadians } from "../utils/mathHelper";
 import { MessagingHub, Messages } from "../MessagingHub";
-import { Point, Angle } from "../types";
+import { Point, AngleEditRequestData, Rect } from "../types";
+import { ShowAngleEditorPopover } from "./popover/EditAngle";
 
 export class Canvas {
     private messagingHub: MessagingHub;
@@ -23,8 +24,8 @@ export class Canvas {
             this.showPointMenu(point);
         });
         
-        this.messagingHub.subscribe(Messages.ANGLE_EDIT_REQUESTED, (angleData: Angle) => {
-            this.showAngleEditor(angleData);
+        this.messagingHub.subscribe(Messages.ANGLE_EDIT_REQUESTED, (data: AngleEditRequestData) => {
+            this.showAngleEditor(data);
         });
         
         this.messagingHub.subscribe(Messages.LOAD_REQUESTED, () => {
@@ -357,174 +358,17 @@ export class Canvas {
     }
 
     // Angle Edit Popover
-    showAngleEditor = (angleData: Angle): void => {
-        // Remove any existing input dialogs
-        document.querySelectorAll('.angle-input-container').forEach(el => el.remove());
-        
-        const input = createElement('div', { class: 'angle-input-container' }) as HTMLElement;
-        
-        // Get SVG bounding rect to position correctly
+    showAngleEditor = (data: AngleEditRequestData): void => {
         const svgRect = this.svg.getBoundingClientRect();
-        
-        // Get text element from the group
-        const textElement = angleData.groupElement?.querySelector('text');
-        const textX = textElement ? parseFloat(textElement.getAttribute('x') || '100') : 100;
-        const textY = textElement ? parseFloat(textElement.getAttribute('y') || '100') : 100;
-        
-        input.style.left = (svgRect.left + textX) + 'px';
-        input.style.top = (svgRect.top + textY) + 'px';
-        
-        // Create input fields
-        const nameField = createElement('input', {
-            type: 'text',
-            id: 'angleNameInput',
-            placeholder: 'Angle name'
-        }) as HTMLInputElement;
-        nameField.value = angleData.name || '';
-        
-        const labelField = createElement('input', {
-            type: 'text',
-            id: 'angleLabelInput',
-            placeholder: 'Greek letter label'
-        }) as HTMLInputElement;
-        labelField.value = angleData.label || '';
-        
-        const valueField = createElement('input', {
-            type: 'text',
-            id: 'angleValueInput',
-            placeholder: `${angleData.calculatedValue?.toFixed(1)}°`,
-            style: 'flex: 1;'
-        }) as HTMLInputElement;
-        valueField.value = angleData.value?.toString() || '';
-        
-        const checkboxElement = createElement('input', {
-            type: 'checkbox',
-            title: 'Select as target angle'
-        }) as HTMLInputElement;
-        const targetAngle = createElement('label', { class: 'target-angle-label' }, [
-            checkboxElement,
-            ' Target'
-        ]);
-        
-        // Question mark button handler
-        checkboxElement.addEventListener('input', () => {
-            angleData.target = checkboxElement.checked;
-            angleData.groupElement?.classList.toggle('target-angle');
-            autoSave();
-        });
-
-        // Create value row container with flex
-        const valueRow = createElement('div', {
-            style: 'display: flex; flex-direction: row; gap: 32px; align-items: center;'
-        }, [valueField, targetAngle]);
-        
-        const radiusField = createElement('input', {
-            type: 'number',
-            id: 'angleRadiusInput',
-            min: '10',
-            max: '100',
-            step: '5'
-        }) as HTMLInputElement;
-        radiusField.value = String(angleData.radius || 30);
-        
-        // Greek letters
-        const greekLetters = [
-            { letter: 'α', name: 'alpha' },
-            { letter: 'β', name: 'beta' },
-            { letter: 'γ', name: 'gamma' },
-            { letter: 'δ', name: 'delta' },
-            { letter: 'ε', name: 'epsilon' }
-        ];
-        
-        const greekButtons = greekLetters.map(({ letter, name }) => 
-            createElement('button', {
-                class: 'greek-letter-btn',
-                'data-letter': letter,
-                title: name
-            }, [letter])
-        );
-        
-        const greekContainer = createElement('div', { class: 'greek-letters-container' }, [
-            ...greekButtons
-        ]);
-        
-        // Assemble input dialog
-        input.appendChild(createElement('div', { class: 'angle-input-header' }, ['Edit Angle']));
-        input.appendChild(createElement('label', {}, ['Name:', nameField]));
-        input.appendChild(createElement('label', {}, ['Label (Greek letter):', labelField]));
-        input.appendChild(greekContainer);
-        input.appendChild(createElement('label', {}, ['Value (degrees):', valueRow]));
-        input.appendChild(createElement('label', {}, ['Radius (px):', radiusField]));
-        input.appendChild(createElement('div', { class: 'angle-input-buttons' }, [
-            createElement('button', { id: 'closeAngle' }, ['Close']),
-            createElement('button', { id: 'deleteAngle', style: 'background-color: #dc3545;' }, ['Delete'])
-        ]));
-        
-        document.body.appendChild(input);
-        
-        // Auto-save function
-        const autoSave = (): void => {
-            const name = nameField.value;
-            const label = labelField.value;
-            const value = valueField.value;
-            const radius = parseFloat(radiusField.value);
-            
-            this.messagingHub.emit(Messages.ANGLE_UPDATED, {
-                angleData,
-                name,
-                label,
-                value,
-                radius
-            });
+        const pos: Rect = {
+            top: svgRect.top, 
+            left: svgRect.left,
+            width: svgRect.width,
+            height: svgRect.height,
+            x: svgRect.x,
+            y: svgRect.y,
         };
-        
-        // Event delegation for Greek letter buttons
-        greekContainer.addEventListener('click', (e) => {
-            const btn = (e.target as HTMLElement).closest('.greek-letter-btn') as HTMLButtonElement;
-            if (btn) {
-                e.preventDefault();
-                const letter = btn.dataset.letter;
-                if (letter) {
-                    labelField.value = letter;
-                    autoSave();
-                    labelField.focus();
-                }
-            }
-        });
-        
-        // Auto-save on input change
-        nameField.addEventListener('input', autoSave);
-        labelField.addEventListener('input', autoSave);
-        valueField.addEventListener('input', autoSave);
-        radiusField.addEventListener('input', autoSave);
-        
-        valueField.focus();
-        valueField.select();
-        
-        document.getElementById('closeAngle')!.addEventListener('click', () => {
-            input.remove();
-        });
-        
-        document.getElementById('deleteAngle')!.addEventListener('click', () => {
-            this.messagingHub.emit(Messages.ANGLE_DELETE_REQUESTED, angleData);
-            input.remove();
-        });
-        
-        valueField.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                input.remove();
-            }
-        });
-        
-        // Close on outside click
-        setTimeout(() => {
-            document.addEventListener('click', function closeInput(e) {
-                if (!input.contains(e.target as Node)) {
-                    input.remove();
-                    document.removeEventListener('click', closeInput);
-                }
-            });
-        }, 100);
+        ShowAngleEditorPopover(data, pos, this.messagingHub);
     }
 
     // Load JSON Dialog

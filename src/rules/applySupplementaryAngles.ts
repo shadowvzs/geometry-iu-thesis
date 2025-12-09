@@ -2,7 +2,7 @@ import type { Angle, Line, Point, Triangle, Circle } from '../types';
 import {
     pointToAngle,
     getUnsolvedAngles,
-    sumOfSolvedAnglesValue
+    sumOfSolvedAnglesValue,    
 } from '../utils/mathHelper';
 
 interface SolveData {
@@ -22,7 +22,7 @@ interface GetAdjacentAnglesParams {
     lines: Line[];
 }
 
-const getAdjacentAngles = ({ angles, points, lines }: GetAdjacentAnglesParams, vertex: string): (Angle | null)[] => {
+const getAdjacentAngles = ({ angles, points, lines }: GetAdjacentAnglesParams, vertex: string): Angle[] => {
     const v = points.find(p => p.id === vertex);
     if (!v) return [];
 
@@ -36,7 +36,7 @@ const getAdjacentAngles = ({ angles, points, lines }: GetAdjacentAnglesParams, v
         line.points.includes(vertex) && line.points.includes(p1) && line.points.includes(p2)
     );
 
-    return rays.map((curr, i) => {
+    const adjacentAngles = rays.map((curr, i) => {
         const next = rays[(i + 1) % rays.length];
         if (isOnLine(curr, next)) return null;
 
@@ -45,10 +45,12 @@ const getAdjacentAngles = ({ angles, points, lines }: GetAdjacentAnglesParams, v
             a.sidepoints.includes(curr) &&
             a.sidepoints.includes(next)
         ) || null;
-    }).filter(Boolean);
+    }).filter(v => v !== null);
+
+    return adjacentAngles;
 };
 
-export const applySupplementaryAngles = ({ angleMapsByPointId, lines, points }: SolveData, log: LogFn): boolean => {
+export const applySupplementaryAngles = ({ angleMapsByPointId, lines, points, equations }: SolveData, log: LogFn): boolean => {
     let changesMade = false;
 
     const supplementaryAngleGroups: Angle[][] = [];
@@ -73,16 +75,15 @@ export const applySupplementaryAngles = ({ angleMapsByPointId, lines, points }: 
             const hasAtleastOnePointAfter = anglesWithThisVertex.some(angle => 
                 pointsAfterThisVertex.includes(angle.sidepoints[0]) || pointsAfterThisVertex.includes(angle.sidepoints[1])
             );
-            
+
             if (!hasAtleastOnePointBefore || !hasAtleastOnePointAfter) {
                 return;
             }
-            
             const adjacentAngles = getAdjacentAngles({
                 angles: anglesWithThisVertex,
                 lines: [line],
                 points
-            }, vertex).filter((a): a is Angle => a !== null);
+            }, vertex);
 
             if (adjacentAngles.length === 0 || getUnsolvedAngles(adjacentAngles).length === 0) {
                 return;

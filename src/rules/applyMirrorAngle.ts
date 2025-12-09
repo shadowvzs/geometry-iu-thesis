@@ -20,7 +20,7 @@ const getMirrorAngle = (before: string, after: string, anglesAtVertex: Angle[]):
     );
 };
 
-export const applyMirrorAngle = ({ angleMapsByPointId, lines }: SolveData, log: LogFn): boolean => {
+export const applyMirrorAngle = ({ angleMapsByPointId, lines, equations }: SolveData, log: LogFn): boolean => {
     let changesMade = false;
 
     if (lines.length < 2) {

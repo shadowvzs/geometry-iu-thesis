@@ -1,8 +1,5 @@
 // DOM element creation helper utilities
-
-import type { SvgAttributes } from '../types';
-
-type ElementChild = string | Element | [string, SvgAttributes?, ElementChild[]?];
+import type { ElementChild, SvgAttributes } from '../types';
 
 /**
  * Create HTML or SVG element with attributes
@@ -53,3 +50,23 @@ export function createElement(
     return element;
 }
 
+export const createSelect = (options: string[], attributes: SvgAttributes = {}): HTMLSelectElement => {
+    const optionsElements: ElementChild[] = options.map(opt => ['option', { value: opt }, [opt]]);
+    const select = createElement('select', attributes, optionsElements) as HTMLSelectElement;
+    return select;
+}
+
+export const createSelectOptions = (options: string[], value: string): HTMLElement[] => {
+    const optionsElements: HTMLElement[] = options.map(opt => {
+        const attributes = { value: opt };
+        if (opt === value) {
+            Reflect.set(attributes, 'selected', true);
+        }
+        return createElement(
+            'option',
+            attributes,
+            [opt]
+        ) as HTMLElement;
+    });
+    return optionsElements;
+};

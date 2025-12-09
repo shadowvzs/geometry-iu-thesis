@@ -142,4 +142,3 @@ export const getSvgElementData = (htmlElement: Element): SvgElementData => {
 
     return { elementName, data };
 };
-

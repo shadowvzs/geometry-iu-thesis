@@ -41,7 +41,7 @@ export interface SavedAngle {
     id: string;
     pointId: string;
     sidepoints: [string, string] | string[];
-    value?: number | string | null;
+    value?: number | null;
     calculatedValue?: number;
     name: string;
     label: string;
@@ -76,6 +76,13 @@ export interface SolverHistoryItem {
 export interface Position {
     x: number;
     y: number;
+}
+
+export interface Rect extends Position {
+    top: number;
+    left: number;
+    width: number;
+    height: number;
 }
 export interface Point extends Position {
     /** Unique identifier (typically A, B, C, etc.) */
@@ -177,7 +184,7 @@ export interface Angle {
     /** IDs of the two side points [point1Id, point2Id] */
     sidepoints: [string, string];
     /** User-assigned angle value in degrees */
-    value?: number | string | null;
+    value?: number | null;
     /** Calculated angle value in degrees */
     calculatedValue?: number;
     /** User label for the angle */
@@ -459,6 +466,12 @@ export interface PointClickData {
 /** Parameters for angle click event */
 export interface AngleClickData {
     angleData: Angle;
+    angles: Angle[];
+}
+
+export interface AngleEditRequestData {
+    angle: Angle;
+    angles?: Angle[];
 }
 
 /** Parameters for angle update event */
@@ -466,7 +479,7 @@ export interface UpdateAngleData {
     angleData: Angle;
     name: string;
     label: string;
-    value: string;
+    value: number;
     radius: number;
 }
 
@@ -496,4 +509,5 @@ export interface SvgGroups {
 
 /** SVG element attributes */
 export type SvgAttributes = Record<string, string | number | string[]>;
+export type ElementChild = string | Element | [string, SvgAttributes?, ElementChild[]?];
 

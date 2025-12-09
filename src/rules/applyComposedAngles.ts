@@ -50,6 +50,25 @@ const findCompositeAngles = (angles: Angle[], points: Point[]): CompositeGroup[]
             );
         };
         
+        // Helper: find all ways to decompose the range [start, end] into valid angles
+        const findDecompositions = (start: number, end: number): Angle[][] => {
+            if (start === end) return [[]]; // base case: empty decomposition
+            
+            const results: Angle[][] = [];
+            // Try each possible "next" ray as the end of the first child angle
+            for (let mid = start + 1; mid <= end; mid++) {
+                const angle = findAngle(sortedRays[start], sortedRays[mid]);
+                if (angle) {
+                    // Recursively decompose the rest
+                    const subDecomps = findDecompositions(mid, end);
+                    for (const subDecomp of subDecomps) {
+                        results.push([angle, ...subDecomp]);
+                    }
+                }
+            }
+            return results;
+        };
+
         for (let i = 0; i < sortedRays.length; i++) {
             for (let j = i + 2; j < sortedRays.length; j++) {
                 const startRay = sortedRays[i];
@@ -58,20 +77,18 @@ const findCompositeAngles = (angles: Angle[], points: Point[]): CompositeGroup[]
                 const parentAngle = findAngle(startRay, endRay);
                 if (!parentAngle) continue;
                 
-                const children: Angle[] = [];
-                for (let k = i; k < j; k++) {
-                    const childAngle = findAngle(sortedRays[k], sortedRays[k + 1]);
-                    if (childAngle) {
-                        children.push(childAngle);
-                    }
-                }
+                // Find ALL valid decompositions of this parent
+                const decompositions = findDecompositions(i, j);
                 
-                if (children.length === j - i) {
-                    compositeGroups.push({
-                        parent: parentAngle,
-                        children: children,
-                        vertexId: vertexId
-                    });
+                // Add each decomposition with 2+ children (skip single-child which would be parent = child)
+                for (const children of decompositions) {
+                    if (children.length >= 2) {
+                        compositeGroups.push({
+                            parent: parentAngle,
+                            children: children,
+                            vertexId: vertexId
+                        });
+                    }
                 }
             }
         }
@@ -80,7 +97,7 @@ const findCompositeAngles = (angles: Angle[], points: Point[]): CompositeGroup[]
     return compositeGroups;
 };
 
-export const applyComposedAngles = ({ angles, points }: SolveData, log: LogFn): boolean => {
+export const applyComposedAngles = ({ angles, points, equations }: SolveData, log: LogFn): boolean => {
     let changesMade = false;
     const composites = findCompositeAngles(angles, points);
     
@@ -109,6 +126,8 @@ export const applyComposedAngles = ({ angles, points }: SolveData, log: LogFn): 
                     log(c, `Composed angle: ${c.name} = ${unknownAngleValue}°`, 'applyComposedAngles');
                     changesMade = true;
                 });
+            } else if (childrenLabel && children.length - sameLabelChildren.length === 1) {
+
             }
         }
         

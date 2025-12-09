@@ -19,9 +19,9 @@ import type {
 import {
     buildOverlappingAnglesMap,
     isThisAngle,
-    getTriangles,
     getAngleNameFromPoints,
     getAngleCalculatedInfo,
+    getTriangles2,
 } from './mathHelper';
 
 import { deepClone } from './objectHelper';
@@ -153,7 +153,7 @@ export function deserializeGeometryData(jsonData: Partial<SerializedGeometryData
             id: Math.random().toString(36),
             pointId: angleData.id,
             sidepoints: angleData.p,
-            value: angleData.v || null,
+            value: angleData.v ? Number(angleData.v) : null,
             label: angleData.l || '',
             hide: !!angleData.h,
             target: !!angleData.t,
@@ -332,7 +332,7 @@ export const enrichGeometryData = (data: NormalizedGeometryData): EnrichedGeomet
         });
     }
 
-    triangles.push(...getTriangles(angles, adjacentPoints, lines));
+    triangles.push(...getTriangles2(angles, adjacentPoints, lines));
 
     if (data.angles) {
         data.angles.forEach(angleData => {

@@ -9,6 +9,11 @@ import testdata8 from './testdata8.json';
 import testdata9 from './testdata9.json';
 import testdata10 from './testdata10.json';
 import testdata11 from './testdata11.json';
+import testdata12 from './testdata12.json';
+import testdata13 from './testdata13.json';
+import testdata14 from './testdata14.json';
+import testdata15 from './testdata15.json';
+import testdata16 from './testdata16.json';
 
 const testdata = [
     testdata1,
@@ -22,6 +27,11 @@ const testdata = [
     testdata9,
     testdata10,
     testdata11,
+    testdata12,
+    testdata13,
+    testdata14,
+    testdata15,
+    testdata16,
 ];
 
 export default testdata;

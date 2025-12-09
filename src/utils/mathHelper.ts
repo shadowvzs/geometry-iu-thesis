@@ -98,11 +98,11 @@ export const sumOfSolvedAnglesValue = (angles: Angle[]): number => {
 
 // Filters and returns only angles that have no solved numeric value.
 export const getUnsolvedAngles = (angles: Angle[]): Angle[] => {
-    return angles.filter(angle => !getAngleValue(angle));
+    return angles.filter(angle => {
+        const v = getAngleValue(angle);
+        return v === null || v === undefined;
+    });
 };
-
-// Alias for compatibility
-export const unsolvedAngles = getUnsolvedAngles;
 
 interface SegmentDistanceResult {
     distance: number;
@@ -455,7 +455,144 @@ export function arePointsCollinearByPosition(p1: Point, p2: Point, p3: Point, th
     return cross < threshold;
 }
 
+// Helper: check if two points have a direct edge
+export const hasDirectEdge = (p1: string, p2: string, adjacentPoints: Map<string, Set<string>>): boolean => {
+    const p1Adjacent = adjacentPoints.get(p1) || new Set();
+    const p2Adjacent = adjacentPoints.get(p2) || new Set();
+    return p1Adjacent.has(p2) || p2Adjacent.has(p1);
+};
+
+
+// Helper: check if two points are connected via a line (all intermediate edges exist)
+export const areConnectedViaLine = (p1: string, p2: string, lines: Line[], adjacentPoints: Map<string, Set<string>>): boolean => {
+    for (const line of lines) {
+        const idx1 = line.points.indexOf(p1);
+        const idx2 = line.points.indexOf(p2);
+        
+        if (idx1 === -1 || idx2 === -1) continue;
+        
+        // Check all consecutive edges between p1 and p2 on this line
+        const start = Math.min(idx1, idx2);
+        const end = Math.max(idx1, idx2);
+        
+        let allEdgesExist = true;
+        for (let i = start; i < end; i++) {
+            if (!hasDirectEdge(line.points[i], line.points[i + 1], adjacentPoints)) {
+                allEdgesExist = false;
+                break;
+            }
+        }
+        
+        if (allEdgesExist) return true;
+    }
+    return false;
+};
+
+// Helper: check if two points are connected (direct edge OR via line)
+const areConnected = (p1: string, p2: string, adjacentPoints: Map<string, Set<string>>, lines: Line[]): boolean => {
+    return hasDirectEdge(p1, p2, adjacentPoints) || areConnectedViaLine(p1, p2, lines, adjacentPoints);
+};
+
+// compared with getTriangles, this function will get the triangles where need to travel on multiple edges to build the triangle
+export const getTriangles2 = (
+    angles: Angle[], 
+    adjacentPoints: Map<string, Set<string>>, 
+    lines: Line[]
+): Triangle[] => {
+    const triangles: Triangle[] = [];
+    const pointIds = Array.from(adjacentPoints.keys());
+    
+    for (let i = 0; i < pointIds.length; i++) {
+        for (let j = i + 1; j < pointIds.length; j++) {
+            for (let k = j + 1; k < pointIds.length; k++) {
+                const p1 = pointIds[i];
+                const p2 = pointIds[j];
+                const p3 = pointIds[k];
+                
+                const hasEdge12 = areConnected(p1, p2, adjacentPoints, lines);
+                const hasEdge13 = areConnected(p1, p3, adjacentPoints, lines);
+                const hasEdge23 = areConnected(p2, p3, adjacentPoints, lines);
+                
+                if (hasEdge12 && hasEdge13 && hasEdge23) {
+                    const areCollinear = lines.some(line => 
+                        line.points.includes(p1) && line.points.includes(p2) && line.points.includes(p3)
+                    );
+                    
+                    if (!areCollinear) {
+                        const triangle: Triangle = new Set([p1, p2, p3]);
+                        triangles.push(triangle);
+                    }
+                }
+            }
+        }
+    }
+    
+    lines.forEach(line => {
+        if (line.points.length < 2) return;
+        
+        const apexPoints = pointIds.filter(pointId => !line.points.includes(pointId));
+        
+        apexPoints.forEach(apex => {
+            const apexAdjacent = adjacentPoints.get(apex) || new Set();
+            
+            for (let i = 0; i < line.points.length; i++) {
+                for (let j = i + 1; j < line.points.length; j++) {
+                    const linePoint1 = line.points[i];
+                    const linePoint2 = line.points[j];
+                    
+                    // Check if apex is connected to both line points (direct or via another line)
+                    const hasEdgeToP1 = apexAdjacent.has(linePoint1) || areConnectedViaLine(apex, linePoint1, lines, adjacentPoints);
+                    const hasEdgeToP2 = apexAdjacent.has(linePoint2) || areConnectedViaLine(apex, linePoint2, lines, adjacentPoints);
+                    
+                    if (hasEdgeToP1 && hasEdgeToP2) {
+                        const triangleKey = [apex, linePoint1, linePoint2].sort().join(',');
+                        
+                        const alreadyExists = triangles.some(tri => {
+                            const triKey = Array.from(tri).sort().join(',');
+                            return triKey === triangleKey;
+                        });
+                        
+                        if (!alreadyExists) {
+                            const triangle: Triangle = new Set([apex, linePoint1, linePoint2]);
+                            triangles.push(triangle);
+                        }
+                    }
+                }
+            }
+        });
+    });
+    
+    angles.forEach(angle => {
+        if (angle.hide && angle.groupElement) {
+            const isAngleInTriangle = triangles.some(triangle => 
+                triangle.has(angle.pointId) && 
+                triangle.has(angle.sidepoints[0]) && 
+                triangle.has(angle.sidepoints[1])
+            );
+            
+            const isSupplementaryAngle = lines.some(line => line.points.includes(angle.pointId));
+            
+            const overlappingAngles = findOverlappingAngles(
+                angle.pointId, 
+                angle.sidepoints[0], 
+                angle.sidepoints[1], 
+                angles.filter(a => a.id !== angle.id), 
+                lines
+            );
+            const hasOverlap = overlappingAngles.length > 0;
+            
+            if ((isAngleInTriangle || isSupplementaryAngle) && !hasOverlap) {
+                angle.hide = false;
+                angle.groupElement.style.display = '';
+            }
+        }
+    });
+
+    return triangles;
+};
+
 export const searchVertexAngleInIsoscelesTriangle = (angles: Angle[], circle: Circle): Angle | undefined => {
+    // 
     const isVertexPoint = angles.find(a => (
         a.pointId === circle.centerPoint &&
         a.sidepoints &&
@@ -636,7 +773,7 @@ export const areAllTrianglesValid = (triangles: string[][], angles: Angle[]): bo
     return hasAtLeastOneValidTriangle;
 };
 
-export function getAngleValue(angle: Angle): number | null {
+export function getAngleValue(angle: Pick<Angle, 'value'>): number | null {
     if (!angle.value) return null;
     const parsed = parseFloat(String(angle.value));
     if (isNaN(parsed)) return null;
@@ -707,6 +844,8 @@ export function isPointInsideAngle(vertex: Point, p1: Point, p2: Point, pTest: P
     return testDiff > 0 && testDiff < angleDiff;
 }
 
+// Let's not delete this function, it's used in the old triangle detection, maybe we can use it in the future.
+// the difference is that this function will get the triangles where can be built with direct edges only.
 export const getTriangles = (
     angles: Angle[], 
     adjacentPoints: Map<string, Set<string>>, 

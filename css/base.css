@@ -170,13 +170,16 @@ body.solver-mode .edge-container.creator-only .edge {
 }
 
 body:not(.solver-mode) .angle-arc:hover,
-body:not(.solver-mode) .angle-group:hover .angle-arc {
+body:not(.solver-mode) .angle-group:hover .angle-arc,
+body:not(.solver-mode) .angle-group.selected .angle-arc
+{
     fill: rgba(52, 152, 219, 0.8);
     stroke-width: 3;
 }
 
 body:not(.solver-mode) .target-angle .angle-arc:hover,
-body:not(.solver-mode) .angle-group.target-angle:hover .angle-arc {
+body:not(.solver-mode) .angle-group.target-angle:hover .angle-arc
+{
     fill: rgba(230, 140, 30, 0.8);
 }
 
@@ -202,6 +205,7 @@ body.solver-mode .angle-group.creator-only {
 
 body:not(.solver-mode) .angle-text:hover,
 body:not(.solver-mode) .angle-group:hover .angle-text,
+body:not(.solver-mode) .angle-group.selected .angle-text,
 .target-angle .angle-text {
     fill: black;
     opacity: 1;
@@ -215,7 +219,7 @@ body:not(.solver-mode) .angle-group:hover .angle-text,
 }
 
 /* Angle Input Popup */
-.angle-input-container {
+.angle-editor-container {
     position: absolute;
     background: white;
     padding: 15px;
@@ -228,6 +232,9 @@ body:not(.solver-mode) .angle-group:hover .angle-text,
 }
 
 .angle-input-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     font-size: 14px;
     font-weight: bold;
     color: #2c3e50;
@@ -236,7 +243,11 @@ body:not(.solver-mode) .angle-group:hover .angle-text,
     border-bottom: 2px solid #9b59b6;
 }
 
-.angle-input-container input {
+.angle-input-header select {
+    padding: 4px 8px;
+}
+
+.angle-editor-container input {
     margin-top: 4px;
     padding: 6px 8px;
     border: 2px solid #bdc3c7;
@@ -246,7 +257,7 @@ body:not(.solver-mode) .angle-group:hover .angle-text,
     width: 100%;
 }
 
-.angle-input-container input:focus {
+.angle-editor-container input:focus {
     outline: none;
     border-color: #9b59b6;
 }

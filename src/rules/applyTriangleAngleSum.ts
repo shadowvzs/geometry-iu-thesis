@@ -2,7 +2,7 @@ import type { Angle, Line, Point, Triangle, Circle } from '../types';
 import {
     searchVertexAngleInIsoscelesTriangle,
     getTriangleAngles,
-    unsolvedAngles,
+    getUnsolvedAngles,
     getAngleValue,
     sumOfKnownAngles,
     haveSameLabels,
@@ -23,7 +23,7 @@ type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
 
 const TriangleAngleSum = 180;
 
-export const applyTriangleAngleSum = ({ triangles, circles, angles }: SolveData, log: LogFn): boolean => {
+export const applyTriangleAngleSum = ({ triangles, circles, angles, equations }: SolveData, log: LogFn): boolean => {
     let changesMade = false;
 
     triangles.forEach(triangleData => {
@@ -38,7 +38,7 @@ export const applyTriangleAngleSum = ({ triangles, circles, angles }: SolveData,
             return;
         }
         
-        const remainingAngles = unsolvedAngles(triangleAngles);
+        const remainingAngles = getUnsolvedAngles(triangleAngles);
         if (remainingAngles.length === 0) {
             return;
         } else if (remainingAngles.length === 1) {
@@ -121,8 +121,6 @@ export const applyTriangleAngleSum = ({ triangles, circles, angles }: SolveData,
             }
         }
     });
-
-    // equilateral triangle check
     
     return changesMade;
 };
