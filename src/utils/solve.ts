@@ -14,6 +14,7 @@ import { applySupplementaryAngles } from '../rules/applySupplementaryAngles';
 import { applySameAngles } from '../rules/applySameAngles';
 import { applyComposedAngles } from '../rules/applyComposedAngles';
 import { applyMirrorAngle } from '../rules/applyMirrorAngle';
+import { applyFullAngleSum } from '../rules/applyFullAngleSum';
 
 export interface SolveData {
     angles: Angle[];
@@ -51,6 +52,7 @@ const scores: Record<string, number> = {
     applyComposedAngles: 2,
     applyMirrorAngle: 1,
     applySameAngles: 0,
+    applyFullAngleSum: 3,
 };
 
 export const solve = (
@@ -78,6 +80,7 @@ export const solve = (
         applySameLabelAngles,
         applySameAngles,
         applySupplementaryAngles,
+        applyFullAngleSum,
         applyTriangleAngleSum,
         applyComposedAngles,
         applyMirrorAngle,
@@ -92,11 +95,14 @@ export const solve = (
             break;
         }
         
+        // Check if all target angles are solved - if so, we can potentially stop early
+        const unsolvedTargets = anglesNeedToBeSolved.filter(a => !a.value);
         const triangleArrays = triangles.map(t => 
             t instanceof Set ? Array.from(t) : t
         ) as string[][];
         
-        if (areAllTrianglesValid(triangleArrays, angles)) {
+        // Only break early if ALL triangles are valid AND all targets are solved
+        if (areAllTrianglesValid(triangleArrays, angles) && unsolvedTargets.length === 0) {
             break;
         }
 
