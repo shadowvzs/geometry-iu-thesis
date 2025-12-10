@@ -1,14 +1,6 @@
-import type { Angle, Line, Point, Triangle, Circle } from '../types';
+import type { SolveDataWithMaps } from '@/utils/solve';
+import type { Angle, Point } from '../types';
 import { getAngleValue } from '../utils/mathHelper';
-
-interface SolveData {
-    angles: Angle[];
-    points: Point[];
-    lines: Line[];
-    triangles: Triangle[] | string[][];
-    circles: Circle[];
-    angleMapsByPointId: Record<string, Angle[]>;
-}
 
 type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
 
@@ -17,6 +9,19 @@ interface CompositeGroup {
     children: Angle[];
     vertexId: string;
 }
+
+// Validate that a composite relationship is geometrically valid
+// The children's calculated values should sum to approximately the parent's calculated value
+const isValidComposite = (parent: Angle, children: Angle[], tolerance: number = 15): boolean => {
+    if (!parent.calculatedValue) return true; // Can't validate without calculated value
+    
+    const childrenSum = children.reduce((acc, child) => {
+        return acc + (child.calculatedValue ?? 0);
+    }, 0);
+    
+    // The children should sum to approximately the parent's geometric value
+    return Math.abs(childrenSum - parent.calculatedValue) <= tolerance;
+};
 
 const findCompositeAngles = (angles: Angle[], points: Point[]): CompositeGroup[] => {
     const compositeGroups: CompositeGroup[] = [];
@@ -82,7 +87,7 @@ const findCompositeAngles = (angles: Angle[], points: Point[]): CompositeGroup[]
                 
                 // Add each decomposition with 2+ children (skip single-child which would be parent = child)
                 for (const children of decompositions) {
-                    if (children.length >= 2) {
+                    if (children.length >= 2 && isValidComposite(parentAngle, children)) {
                         compositeGroups.push({
                             parent: parentAngle,
                             children: children,
@@ -97,7 +102,7 @@ const findCompositeAngles = (angles: Angle[], points: Point[]): CompositeGroup[]
     return compositeGroups;
 };
 
-export const applyComposedAngles = ({ angles, points, equations }: SolveData, log: LogFn): boolean => {
+export const applyComposedAngles = ({ angles, points }: SolveDataWithMaps, log: LogFn): boolean => {
     let changesMade = false;
     const composites = findCompositeAngles(angles, points);
     
@@ -114,13 +119,15 @@ export const applyComposedAngles = ({ angles, points, equations }: SolveData, lo
             const knownSum = knownChildren.reduce((a, b) => a + b, 0);
             if (unknownChildren.length === 1) {
                 const unknownAngleValue = parentValue - knownSum;
-                if (unknownAngleValue <= 0) return;
+                // Validate result is in valid range
+                if (unknownAngleValue <= 0 || unknownAngleValue > 180) return;
                 unknownChildren[0].value = unknownAngleValue;
                 log(unknownChildren[0], `Composed angle: ${parent.name} - known children = ${unknownAngleValue}°`, 'applyComposedAngles');
                 changesMade = true;
             } else if (childrenLabel && (knownChildren.length + sameLabelChildren.length) === children.length) {
                 const unknownAngleValue = (parentValue - knownSum) / sameLabelChildren.length;
-                if (unknownAngleValue <= 0) return;
+                // Validate result is in valid range
+                if (unknownAngleValue <= 0 || unknownAngleValue > 180) return;
                 sameLabelChildren.forEach(c => {
                     c.value = unknownAngleValue;
                     log(c, `Composed angle: ${c.name} = ${unknownAngleValue}°`, 'applyComposedAngles');
@@ -133,6 +140,8 @@ export const applyComposedAngles = ({ angles, points, equations }: SolveData, lo
         
         if (!parentValue && unknownChildren.length === 0) {
             const sum = knownChildren.reduce((a, b) => a + b, 0);
+            // Validate result is in valid range
+            if (sum <= 0 || sum > 180) return;
             parent.value = sum;
             log(parent, `Composed angle: sum of children = ${sum}°`, 'applyComposedAngles');
             changesMade = true;

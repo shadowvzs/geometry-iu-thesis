@@ -1,3 +1,4 @@
+import { NAME, VERSION } from "@/data/constants";
 import { createElement } from "../utils/domHelper";
 import { MessagingHub, Messages } from "../MessagingHub";
 
@@ -62,6 +63,12 @@ const getDefaultButtonConfigs = (): Record<string, ButtonConfig> => ({
         icon: '🔍',
         title: 'Solve Unknown Angles (Use geometric theorems)',
         action: 'solveAngles',
+        params: []
+    },
+    extractEquations: {
+        icon: '📄',
+        title: 'Extract Equations',
+        action: 'extractEquations',
         params: []
     },
     hideElement: {
@@ -133,7 +140,7 @@ export class Toolbar {
     initialize(): HTMLElement {
         this.container = createElement('div', { class: 'toolbar' }, [
             ['header', { class: 'toolbar-header' }, [
-                ['h1', {}, ['Geometry Tool']],
+                ['h1', {}, [`${NAME} v${VERSION}`]],
                 ['div', { class: 'toolbar-feedback hide' }, []]
             ]],
             ['div', { class: 'tool-buttons' }],

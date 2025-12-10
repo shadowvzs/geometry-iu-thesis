@@ -1,21 +1,13 @@
-import type { Angle, Line, Point, Triangle, Circle } from '../types';
+import type { SolveDataWithMaps } from '@/utils/solve';
+import type { Angle } from '../types';
 import {
     getAngleValue,
     findSameAnglesGroups,
 } from '../utils/mathHelper';
 
-interface SolveData {
-    angles: Angle[];
-    points: Point[];
-    lines: Line[];
-    triangles: Triangle[] | string[][];
-    circles: Circle[];
-    angleMapsByPointId: Record<string, Angle[]>;
-}
-
 type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
 
-export const applySameAngles = ({ angleMapsByPointId, lines, equations }: SolveData, log: LogFn): boolean => {
+export const applySameAngles = ({ angleMapsByPointId, lines }: SolveDataWithMaps, log: LogFn): boolean => {
     let changesMade = false;
 
     Object.keys(angleMapsByPointId).forEach(vertex => {
@@ -51,6 +43,7 @@ export const applySameAngles = ({ angleMapsByPointId, lines, equations }: SolveD
                     changesMade = true;
                 });
             }
+
         });
     });
     

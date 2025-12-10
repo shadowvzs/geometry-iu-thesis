@@ -40,11 +40,8 @@ export interface SolveResult {
 
 type SolverMethod = (data: SolveDataWithMaps, log: SolveOptions['setAngle']) => boolean;
 
-type Equation = string;
-
-interface SolveDataWithMaps extends SolveData {
+export interface SolveDataWithMaps extends SolveData {
     angleMapsByPointId: Record<string, Angle[]>;
-    equations: Equation[];
 }
 
 const scores: Record<string, number> = {
@@ -61,7 +58,6 @@ export const solve = (
     { setAngle, maxIterations = 100 }: SolveOptions
 ): SolveResult => {
     const startTime = performance.now();
-    const equations: Equation[] = [];
 
     const data: SolveDataWithMaps = {
         adjacentPoints,
@@ -71,7 +67,6 @@ export const solve = (
         lines,
         points,
         triangles,
-        equations
     };
 
     const anglesNeedToBeSolved = getAnglesNeedToBeSolved(angles);
@@ -127,7 +122,7 @@ export const solve = (
     
     const endTime = performance.now();
     const executionTime = endTime - startTime;
-    
+
     return {
         isValid,
         executionTime,

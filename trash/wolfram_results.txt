@@ -1,0 +1,457 @@
+================================================================================
+WOLFRAM ALPHA EQUATION SOLVER TEST
+================================================================================
+
+ΓÜá∩╕Å  No WOLFRAM_APP_ID environment variable set.
+   Will generate queries but not call API.
+
+   To use API: set WOLFRAM_APP_ID=your_app_id
+
+
+[1/17] Test data with a simple isosceles triangle
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 3
+  ≡ƒô¥ Raw equations: 4
+  ≡ƒöñ Simplified equations: 4
+  ≡ƒôï Variable mapping:
+     a = ΓêáBAC
+     b = ΓêáABC
+     c = ΓêáACB
+
+  ≡ƒöì Wolfram Query:
+     solve b=c, a=180-b-c, a+b+c=180, a=80
+
+  ≡ƒôè Analysis:
+     Variables: 3 (a, b, c)
+     Constraints: 4
+     Γ£à Likely solvable: 4 constraints ΓëÑ 3 variables
+
+[2/17] Test data with a triangle with multiple angles and constraints - Eigenmann's triangle - third problem
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 8
+  ≡ƒô¥ Raw equations: 11
+  ≡ƒöñ Simplified equations: 11
+  ≡ƒôï Variable mapping:
+     a = ΓêáBAC
+     b = ΓêáCAD
+     c = ΓêáACD
+     d = ΓêáADC
+     e = ΓêáACB
+     f = ΓêáDCB
+     g = ΓêáABC
+     h = ΓêáEBC
+
+  ≡ƒöì Wolfram Query:
+     solve f=c+e, g=e, a=180-g-e, b=d, c=180-b-d, a+g+e=180, b+c+d=180, a+b=180, h+g=180, g=39, h=141
+
+  ≡ƒôè Analysis:
+     Variables: 8 (a, g, e, b, c, d, h, f)
+     Constraints: 11
+     Γ£à Likely solvable: 11 constraints ΓëÑ 8 variables
+
+[3/17] Test data with angle which splited by 3 angles with same label, main triangle is isosceles
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 16
+  ≡ƒô¥ Raw equations: 26
+  ≡ƒöñ Simplified equations: 19
+  ≡ƒôï Variable mapping:
+     a = ΓêáACB = ΓêáACD = ΓêáACE
+     b = ΓêáABC = ΓêáABD = ΓêáABE
+     c = ΓêáBAE = ΓêáEAD = ΓêáCAD
+     d = ΓêáBAC
+     e = ΓêáBEA
+     f = ΓêáCEA
+     g = ΓêáCAE
+     h = ΓêáBAD
+     i = ΓêáCDA
+     j = ΓêáBDA
+
+  ≡ƒöì Wolfram Query:
+     solve h=c+c, d=c+c+c, d=c+g, d=h+c, g=c+c, a=a, b=b, c=c, b=a, d=180-b-a, d+b+a=180, h+b+j=180, c+b+e=180, c+a+i=180, g+a+f=180, f+e=180, i+j=180, d=120
+
+  ≡ƒôè Analysis:
+     Variables: 10 (d, b, a, h, j, c, e, i, g, f)
+     Constraints: 16
+     Γ£à Likely solvable: 16 constraints ΓëÑ 10 variables
+
+[4/17] isosceles triangle where the vertex angle (circle center point angle) is bisected and 1 angle from the bisected angle is given
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 9
+  ≡ƒô¥ Raw equations: 13
+  ≡ƒöñ Simplified equations: 12
+  ≡ƒôï Variable mapping:
+     a = ΓêáABC = ΓêáABD
+     b = ΓêáBCA = ΓêáACD
+     c = ΓêáBAD = ΓêáCAD
+     d = ΓêáBAC
+     e = ΓêáBDA
+     f = ΓêáCDA
+
+  ≡ƒöì Wolfram Query:
+     solve d=c+c, a=a, b=b, c=c, a=b, d=180-a-b, d+a+b=180, c+a+e=180, c+b+f=180, e+f=180, c=22
+
+  ≡ƒôè Analysis:
+     Variables: 6 (d, a, b, c, e, f)
+     Constraints: 9
+     Γ£à Likely solvable: 9 constraints ΓëÑ 6 variables
+
+[5/17] Example from Eigenmann's triangle - second problem (nr 3), 2 circles and 1 supplementary angle given
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 8
+  ≡ƒô¥ Raw equations: 11
+  ≡ƒöñ Simplified equations: 11
+  ≡ƒôï Variable mapping:
+     a = ΓêáBAC
+     b = ΓêáCAD
+     c = ΓêáADC
+     d = ΓêáACD
+     e = ΓêáDCB
+     f = ΓêáACB
+     g = ΓêáEBC
+     h = ΓêáABC
+
+  ≡ƒöì Wolfram Query:
+     solve e=d+f, h=f, a=180-h-f, b=c, d=180-b-c, a+h+f=180, b+d+c=180, a+b=180, g+h=180, h=39, g=141
+
+  ≡ƒôè Analysis:
+     Variables: 8 (a, h, f, b, d, c, g, e)
+     Constraints: 11
+     Γ£à Likely solvable: 11 constraints ΓëÑ 8 variables
+
+[6/17] ABC triangle with one base angle known, isosceles with a circle
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 3
+  ≡ƒô¥ Raw equations: 4
+  ≡ƒöñ Simplified equations: 4
+  ≡ƒôï Variable mapping:
+     a = ΓêáABC
+     b = ΓêáBCA
+     c = ΓêáBAC
+
+  ≡ƒöì Wolfram Query:
+     solve a=b, c=180-a-b, c+a+b=180, a=44
+
+  ≡ƒôè Analysis:
+     Variables: 3 (c, a, b)
+     Constraints: 4
+     Γ£à Likely solvable: 4 constraints ΓëÑ 3 variables
+
+[7/17] ABC triangle which have a point D on AB, angles at ACD and CDB are given (supplementary with CDA)
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 9
+  ≡ƒô¥ Raw equations: 11
+  ≡ƒöñ Simplified equations: 11
+  ≡ƒôï Variable mapping:
+     a = ΓêáDAC = ΓêáBAC
+     b = ΓêáDBC = ΓêáABC
+     c = ΓêáACD
+     d = ΓêáBDC
+     e = ΓêáADC
+     f = ΓêáACB
+     g = ΓêáDCB
+
+  ≡ƒöì Wolfram Query:
+     solve f=g+c, a=a, b=b, a+b+f=180, a+e+c=180, b+d+g=180, e+d=180, e=50, c=55, d=130, b=29
+
+  ≡ƒôè Analysis:
+     Variables: 7 (a, b, f, e, c, d, g)
+     Constraints: 9
+     Γ£à Likely solvable: 9 constraints ΓëÑ 7 variables
+
+[8/17] ABC triangle with one angle known, the vertex angle
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 3
+  ≡ƒô¥ Raw equations: 4
+  ≡ƒöñ Simplified equations: 4
+  ≡ƒôï Variable mapping:
+     a = ΓêáABC
+     b = ΓêáBCA
+     c = ΓêáBAC
+
+  ≡ƒöì Wolfram Query:
+     solve a=b, c=180-a-b, c+a+b=180, c=88
+
+  ≡ƒôè Analysis:
+     Variables: 3 (c, a, b)
+     Constraints: 4
+     Γ£à Likely solvable: 4 constraints ΓëÑ 3 variables
+
+[9/17] ABC triangle with two angles known, no labels or circle
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 3
+  ≡ƒô¥ Raw equations: 3
+  ≡ƒöñ Simplified equations: 3
+  ≡ƒôï Variable mapping:
+     a = ΓêáACB
+     b = ΓêáCBA
+     c = ΓêáCAB
+
+  ≡ƒöì Wolfram Query:
+     solve c+a+b=180, a=55, b=33
+
+  ≡ƒôè Analysis:
+     Variables: 3 (c, a, b)
+     Constraints: 3
+     Γ£à Likely solvable: 3 constraints ΓëÑ 3 variables
+
+[10/17] ABC triangle with two angles labeled the same, one angle known which have no label
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 3
+  ≡ƒô¥ Raw equations: 5
+  ≡ƒöñ Simplified equations: 4
+  ≡ƒôï Variable mapping:
+     a = ΓêáACB = ΓêáCBA
+     b = ΓêáCAB
+
+  ≡ƒöì Wolfram Query:
+     solve a=a, b+a+a=180, b=92
+
+  ≡ƒôè Analysis:
+     Variables: 2 (b, a)
+     Constraints: 3
+     Γ£à Likely solvable: 3 constraints ΓëÑ 2 variables
+
+[11/17] ABC triangle with two angles labeled the same, one angle known which is labeled is given
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 3
+  ≡ƒô¥ Raw equations: 5
+  ≡ƒöñ Simplified equations: 4
+  ≡ƒôï Variable mapping:
+     a = ΓêáACB = ΓêáCBA
+     b = ΓêáCAB
+
+  ≡ƒöì Wolfram Query:
+     solve a=a, b+a+a=180, a=44
+
+  ≡ƒôè Analysis:
+     Variables: 2 (b, a)
+     Constraints: 3
+     Γ£à Likely solvable: 3 constraints ΓëÑ 2 variables
+
+[12/17] Point A with four points B, C, D, E on a circle around A, two lines DAE and BAC, it is like a plus sign, 2 angle was give, DAB is 88 and BAE is 92
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 4
+  ≡ƒô¥ Raw equations: 10
+  ≡ƒöñ Simplified equations: 6
+  ≡ƒôï Variable mapping:
+     a = ΓêáCAD = ΓêáBAE
+     b = ΓêáCAE = ΓêáBAD
+
+  ≡ƒöì Wolfram Query:
+     solve a=a, b=b, a+b=180, a=92, b+a=180, b=88
+
+  ≡ƒôè Analysis:
+     Variables: 2 (a, b)
+     Constraints: 4
+     Γ£à Likely solvable: 4 constraints ΓëÑ 2 variables
+
+[13/17] testdata13
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 8
+  ≡ƒô¥ Raw equations: 15
+  ≡ƒöñ Simplified equations: 12
+  ≡ƒôï Variable mapping:
+     a = ΓêáCAD = ΓêáBAE
+     b = ΓêáDAE = ΓêáBAC
+     c = ΓêáACB
+     d = ΓêáABC
+     e = ΓêáADE
+     f = ΓêáAED
+
+  ≡ƒöì Wolfram Query:
+     solve d=c, b=180-d-c, e=f, b=180-e-f, a=a, b=b, b+d+c=180, b+e+f=180, a+b=180, a=136, b+a=180, b=44
+
+  ≡ƒôè Analysis:
+     Variables: 6 (b, d, c, e, f, a)
+     Constraints: 10
+     Γ£à Likely solvable: 10 constraints ΓëÑ 6 variables
+
+[14/17] Triangle with multiple internal points and labeled angles
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 27
+  ≡ƒô¥ Raw equations: 57
+  ≡ƒöñ Simplified equations: 33
+  ≡ƒôï Variable mapping:
+     a = ΓêáBAC = ΓêáCAD = ΓêáBAE = ΓêáDAE = ΓêáCAF = ΓêáEAF
+     b = ΓêáACB = ΓêáBCE
+     c = ΓêáACD = ΓêáECD
+     d = ΓêáABC = ΓêáCBD
+     e = ΓêáADE = ΓêáFDE = ΓêáEDC = ΓêáBDC
+     f = ΓêáADC = ΓêáFDC
+     g = ΓêáAEF = ΓêáCED
+     h = ΓêáDFE
+     i = ΓêáAFE
+     j = ΓêáCEF
+     k = ΓêáAED
+     l = ΓêáFED
+     m = ΓêáBDE
+     n = ΓêáBCD
+
+  ≡ƒöì Wolfram Query:
+     solve b=c+n, k=g+l, j=l+g, m=e+e, f=e+e, a=a, b=b, c=c, d=d, e=e, f=f, g=g, b=d, a=180-b-d, n+d+e=180, b+d+a=180, c+f+a=180, c+e+g=180, e+a+k=180, e+l+h=180, a+g+i=180, i+h=180, h=90, g+j=180, g+l+g=180, k+g=180, e+m=180, e+e+e=180, f+e=180, i=90
+
+  ≡ƒôè Analysis:
+     Variables: 14 (n, d, e, b, a, c, f, g, k, l, h, i, j, m)
+     Constraints: 26
+     Γ£à Likely solvable: 26 constraints ΓëÑ 14 variables
+
+[15/17] Equilateral triangle with two circles, one circle is centered at point A, the other circle is centered at point B, circle intersection point is C
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 3
+  ≡ƒô¥ Raw equations: 3
+  ≡ƒöñ Simplified equations: 3
+  ≡ƒôï Variable mapping:
+     a = ΓêáABC
+     b = ΓêáBAC
+     c = ΓêáBCA
+
+  ≡ƒöì Wolfram Query:
+     solve a=c, b=180-a-c, b+a+c=180
+
+  ≡ƒôè Analysis:
+     Variables: 3 (b, a, c)
+     Constraints: 3
+     Γ£à Likely solvable: 3 constraints ΓëÑ 3 variables
+
+[16/17] Test data with a complex triangle, where we have ISOSCELES triangles and a circle, multiple composed angles
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 16
+  ≡ƒô¥ Raw equations: 26
+  ≡ƒöñ Simplified equations: 22
+  ≡ƒôï Variable mapping:
+     a = ΓêáBAC = ΓêáCAD
+     b = ΓêáABC = ΓêáCBD = ΓêáCBE
+     c = ΓêáBDC = ΓêáCDE
+     d = ΓêáACD = ΓêáBCD
+     e = ΓêáACB
+     f = ΓêáADC
+     g = ΓêáBEC
+     h = ΓêáDEC
+     i = ΓêáACE
+     j = ΓêáBCE
+     k = ΓêáDCE
+
+  ≡ƒöì Wolfram Query:
+     solve i=d+k, e=d+k+j, e=d+d, e=i+j, d=k+j, a=a, b=b, c=c, d=d, e=b, a=180-e-b, a+e+b=180, a+d+f=180, d+b+c=180, j+b+g=180, k+c+h=180, f+c=180, h+g=180, h=90, a=44, g=90
+
+  ≡ƒôè Analysis:
+     Variables: 11 (a, e, b, d, f, c, j, g, k, h, i)
+     Constraints: 18
+     Γ£à Likely solvable: 18 constraints ΓëÑ 11 variables
+
+[17/17] testdata17
+------------------------------------------------------------
+  ≡ƒôÉ Angles: 17
+  ≡ƒô¥ Raw equations: 25
+  ≡ƒöñ Simplified equations: 25
+  ≡ƒôï Variable mapping:
+     a = ΓêáBAD
+     b = ΓêáABC
+     c = ΓêáDEB
+     d = ΓêáABE
+     e = ΓêáADE
+     f = ΓêáBAC
+     g = ΓêáBCA
+     h = ΓêáDAE
+     i = ΓêáCAE
+     j = ΓêáBAE
+     k = ΓêáBEA
+     l = ΓêáDEA
+     m = ΓêáCBD
+     n = ΓêáEBD
+     o = ΓêáABD
+     p = ΓêáEDB
+     q = ΓêáADB
+
+  ≡ƒöì Wolfram Query:
+     solve i=f+j, m=o+b, c=l+k, e=q+p, f=g, b=180-f-g, o=q, a=180-o-q, d=k, j=180-d-k, e=l, h=180-e-l, b+f+g=180, o+a+q=180, d+j+k=180, n+p+c=180, h+e+l=180, a+f=180, h+i=180, h+j+f=180, d+b=180, n+m=180, n+o+b=180, g=16
+
+  ≡ƒôè Analysis:
+     Variables: 17 (b, f, g, o, a, q, d, j, k, n, p, c, h, e, l, i, m)
+     Constraints: 25
+     Γ£à Likely solvable: 25 constraints ΓëÑ 17 variables
+
+================================================================================
+SUMMARY
+================================================================================
+
+Γ£à Likely Solvable: 17/17
+   - Test data with a simple isosceles triangle: 4 constraints ΓëÑ 3 variables
+   - Test data with a triangle with multiple angles and constraints - Eigenmann's triangle - third problem: 11 constraints ΓëÑ 8 variables
+   - Test data with angle which splited by 3 angles with same label, main triangle is isosceles: 16 constraints ΓëÑ 10 variables
+   - isosceles triangle where the vertex angle (circle center point angle) is bisected and 1 angle from the bisected angle is given: 9 constraints ΓëÑ 6 variables
+   - Example from Eigenmann's triangle - second problem (nr 3), 2 circles and 1 supplementary angle given: 11 constraints ΓëÑ 8 variables
+   - ABC triangle with one base angle known, isosceles with a circle: 4 constraints ΓëÑ 3 variables
+   - ABC triangle which have a point D on AB, angles at ACD and CDB are given (supplementary with CDA): 9 constraints ΓëÑ 7 variables
+   - ABC triangle with one angle known, the vertex angle: 4 constraints ΓëÑ 3 variables
+   - ABC triangle with two angles known, no labels or circle: 3 constraints ΓëÑ 3 variables
+   - ABC triangle with two angles labeled the same, one angle known which have no label: 3 constraints ΓëÑ 2 variables
+   - ABC triangle with two angles labeled the same, one angle known which is labeled is given: 3 constraints ΓëÑ 2 variables
+   - Point A with four points B, C, D, E on a circle around A, two lines DAE and BAC, it is like a plus sign, 2 angle was give, DAB is 88 and BAE is 92: 4 constraints ΓëÑ 2 variables
+   - testdata13: 10 constraints ΓëÑ 6 variables
+   - Triangle with multiple internal points and labeled angles: 26 constraints ΓëÑ 14 variables
+   - Equilateral triangle with two circles, one circle is centered at point A, the other circle is centered at point B, circle intersection point is C: 3 constraints ΓëÑ 3 variables
+   - Test data with a complex triangle, where we have ISOSCELES triangles and a circle, multiple composed angles: 18 constraints ΓëÑ 11 variables
+   - testdata17: 25 constraints ΓëÑ 17 variables
+
+Γ¥î Underdetermined/Errors: 0/17
+
+================================================================================
+WOLFRAM ALPHA QUERIES (for manual testing)
+================================================================================
+
+Test data with a simple isosceles triangle:
+solve b=c, a=180-b-c, a+b+c=180, a=80
+
+Test data with a triangle with multiple angles and constraints - Eigenmann's triangle - third problem:
+solve f=c+e, g=e, a=180-g-e, b=d, c=180-b-d, a+g+e=180, b+c+d=180, a+b=180, h+g=180, g=39, h=141
+
+Test data with angle which splited by 3 angles with same label, main triangle is isosceles:
+solve h=c+c, d=c+c+c, d=c+g, d=h+c, g=c+c, a=a, b=b, c=c, b=a, d=180-b-a, d+b+a=180, h+b+j=180, c+b+e=180, c+a+i=180, g+a+f=180, f+e=180, i+j=180, d=120
+
+isosceles triangle where the vertex angle (circle center point angle) is bisected and 1 angle from the bisected angle is given:
+solve d=c+c, a=a, b=b, c=c, a=b, d=180-a-b, d+a+b=180, c+a+e=180, c+b+f=180, e+f=180, c=22
+
+Example from Eigenmann's triangle - second problem (nr 3), 2 circles and 1 supplementary angle given:
+solve e=d+f, h=f, a=180-h-f, b=c, d=180-b-c, a+h+f=180, b+d+c=180, a+b=180, g+h=180, h=39, g=141
+
+ABC triangle with one base angle known, isosceles with a circle:
+solve a=b, c=180-a-b, c+a+b=180, a=44
+
+ABC triangle which have a point D on AB, angles at ACD and CDB are given (supplementary with CDA):
+solve f=g+c, a=a, b=b, a+b+f=180, a+e+c=180, b+d+g=180, e+d=180, e=50, c=55, d=130, b=29
+
+ABC triangle with one angle known, the vertex angle:
+solve a=b, c=180-a-b, c+a+b=180, c=88
+
+ABC triangle with two angles known, no labels or circle:
+solve c+a+b=180, a=55, b=33
+
+ABC triangle with two angles labeled the same, one angle known which have no label:
+solve a=a, b+a+a=180, b=92
+
+ABC triangle with two angles labeled the same, one angle known which is labeled is given:
+solve a=a, b+a+a=180, a=44
+
+Point A with four points B, C, D, E on a circle around A, two lines DAE and BAC, it is like a plus sign, 2 angle was give, DAB is 88 and BAE is 92:
+solve a=a, b=b, a+b=180, a=92, b+a=180, b=88
+
+testdata13:
+solve d=c, b=180-d-c, e=f, b=180-e-f, a=a, b=b, b+d+c=180, b+e+f=180, a+b=180, a=136, b+a=180, b=44
+
+Triangle with multiple internal points and labeled angles:
+solve b=c+n, k=g+l, j=l+g, m=e+e, f=e+e, a=a, b=b, c=c, d=d, e=e, f=f, g=g, b=d, a=180-b-d, n+d+e=180, b+d+a=180, c+f+a=180, c+e+g=180, e+a+k=180, e+l+h=180, a+g+i=180, i+h=180, h=90, g+j=180, g+l+g=180, k+g=180, e+m=180, e+e+e=180, f+e=180, i=90
+
+Equilateral triangle with two circles, one circle is centered at point A, the other circle is centered at point B, circle intersection point is C:
+solve a=c, b=180-a-c, b+a+c=180
+
+Test data with a complex triangle, where we have ISOSCELES triangles and a circle, multiple composed angles:
+solve i=d+k, e=d+k+j, e=d+d, e=i+j, d=k+j, a=a, b=b, c=c, d=d, e=b, a=180-e-b, a+e+b=180, a+d+f=180, d+b+c=180, j+b+g=180, k+c+h=180, f+c=180, h+g=180, h=90, a=44, g=90
+
+testdata17:
+solve i=f+j, m=o+b, c=l+k, e=q+p, f=g, b=180-f-g, o=q, a=180-o-q, d=k, j=180-d-k, e=l, h=180-e-l, b+f+g=180, o+a+q=180, d+j+k=180, n+p+c=180, h+e+l=180, a+f=180, h+i=180, h+j+f=180, d+b=180, n+m=180, n+o+b=180, g=16
+npm notice
+npm notice New minor version of npm available! 11.6.2 -> 11.7.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.7.0
+npm notice To update run: npm install -g npm@11.7.0
+npm notice

@@ -5,6 +5,7 @@ import { JsonPanel } from './UI/panels/JsonPanel';
 import { DebugPanel } from './UI/panels/DebugPanel';
 import { solve, SolveResult } from './utils/solve';
 import { 
+    getAngleMapsByPointId,
     isPointsOnSameLine,
     isUnsolvedAngle,
     sortLinePoints,
@@ -35,7 +36,8 @@ import type {
     UpdateAngleData
 } from './types';
 import { GeometryTool } from './GeometryTool';
-// import { testdata } from './testdata';
+import { testdata } from './testdata';
+import { extractEquationsWithWolfram } from './rules/extractEquations';
 
 export class Creator extends GeometryTool {
     constructor() {
@@ -56,7 +58,9 @@ export class Creator extends GeometryTool {
         this.saveState();
 
         // for testing purpose
-        // this.loadData(testdata as unknown as SerializedGeometryData);
+        if (location.href.includes('localhost')) {
+            this.loadData(testdata as unknown as SerializedGeometryData);
+        }
     }
 
     registerToolbarButtons = () => {
@@ -70,6 +74,7 @@ export class Creator extends GeometryTool {
         registerButton('assignAngle', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'assignAngle'));
         registerButton('angleBisector', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'angleBisector'));
         registerButton('toggleNames', () => this.messagingHub.emit(Messages.TOGGLE_NAMES));
+        registerButton('extractEquations', () => this.extractEquations());
         registerButton('solveAngles', () => this.solveAngles());
         registerButton('hideElement', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'hideElement'));
         registerButton('save', () => this.messagingHub.emit(Messages.SAVE_REQUESTED));
@@ -484,6 +489,35 @@ export class Creator extends GeometryTool {
         });
         const url = `${window.location.origin}${window.location.pathname}?mode=solver&problem=${encodedData}`;
         window.open(url, '_blank');
+    }
+
+    extractEquations = () => {
+        const angleMapsByPointId = getAngleMapsByPointId(this.angles);
+        const data = {
+            angles: this.angles,
+            lines: this.lines,
+            points: this.points,
+            triangles: this.triangles,
+            circles: this.circles,
+            adjacentPoints: this.adjacentPoints,
+            angleMapsByPointId,
+        };
+        
+        const { simplified, wolframUrl, reverseMapping } = extractEquationsWithWolfram(data);
+        
+        // Log to console
+        console.log('📊 Equations:', simplified.length);
+        console.log(simplified.join('\n'));
+        console.log('\n📝 Variable mapping:');
+        reverseMapping.forEach((names, char) => {
+            console.log(`  ${char} = ${names.join(' = ')}`);
+        });
+        console.log('\n🔗 Wolfram Alpha URL:', wolframUrl);
+        
+        // Open in new window
+        window.open(wolframUrl, '_blank');
+        
+        this.updateStatus(`📊 Extracted ${simplified.length} equations → Wolfram Alpha`);
     }
     
     // Runs the angle solver to calculate unknown angle values using geometric theorems.

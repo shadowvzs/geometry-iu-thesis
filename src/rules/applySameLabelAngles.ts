@@ -1,14 +1,7 @@
-import type { Angle, Line, Point, Triangle, Circle } from '../types';
+import type { SolveDataWithMaps } from '@/utils/solve';
+import type { Angle } from '../types';
 import { getAngleValue } from '../utils/mathHelper';
 
-interface SolveData {
-    angles: Angle[];
-    points: Point[];
-    lines: Line[];
-    triangles: Triangle[] | string[][];
-    circles: Circle[];
-    angleMapsByPointId: Record<string, Angle[]>;
-}
 
 type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
 
@@ -16,7 +9,7 @@ type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
  * Theorem: Angles with the same label have the same value
  * Used for bisected angles or any manually labeled angles
  */
-export const applySameLabelAngles = ({ angles, equations }: SolveData, log: LogFn): boolean => {
+export const applySameLabelAngles = ({ angles }: SolveDataWithMaps, log: LogFn): boolean => {
     const labelValueMap = new Map<string, number>();
     const unsolvedAngles: Angle[] = [];
     

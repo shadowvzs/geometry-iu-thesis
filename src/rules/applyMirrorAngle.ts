@@ -1,14 +1,6 @@
-import type { Angle, Line, Point, Triangle, Circle } from '../types';
+import type { SolveDataWithMaps } from '@/utils/solve';
+import type { Angle } from '../types';
 import { getAngleValue } from '../utils/mathHelper';
-
-interface SolveData {
-    angles: Angle[];
-    points: Point[];
-    lines: Line[];
-    triangles: Triangle[] | string[][];
-    circles: Circle[];
-    angleMapsByPointId: Record<string, Angle[]>;
-}
 
 type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
 
@@ -20,7 +12,7 @@ const getMirrorAngle = (before: string, after: string, anglesAtVertex: Angle[]):
     );
 };
 
-export const applyMirrorAngle = ({ angleMapsByPointId, lines, equations }: SolveData, log: LogFn): boolean => {
+export const applyMirrorAngle = ({ angleMapsByPointId, lines }: SolveDataWithMaps, log: LogFn): boolean => {
     let changesMade = false;
 
     if (lines.length < 2) {
