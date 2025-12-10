@@ -493,15 +493,15 @@ export class Creator extends GeometryTool {
 
     extractEquations = () => {
         const angleMapsByPointId = getAngleMapsByPointId(this.angles);
-        const data = {
+        const data = deepClone({
             angles: this.angles,
             lines: this.lines,
             points: this.points,
-            triangles: this.triangles,
+            triangles: this.triangles.map(tri => Array.from(tri)),
             circles: this.circles,
             adjacentPoints: this.adjacentPoints,
             angleMapsByPointId,
-        };
+        });
         
         const { simplified, wolframUrl, reverseMapping } = extractEquationsWithWolfram(data);
         
@@ -605,7 +605,7 @@ export class Creator extends GeometryTool {
         });
 
         this.ui.toolbar.updateFeedback(solved ? '✔' : '✖');
-        console.info(`Can be solved: ${solved} (${executionTime.toFixed(2)}ms)`, this.triangles);
+        console.info(`Can be solved: ${solved} (${executionTime.toFixed(2)}ms)`);
     }
 
     clear = () => {
