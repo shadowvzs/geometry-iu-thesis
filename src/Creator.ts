@@ -493,6 +493,9 @@ export class Creator extends GeometryTool {
 
     extractEquations = () => {
         const angleMapsByPointId = getAngleMapsByPointId(this.angles);
+        if (this.angles.length === 0) {
+            return  alert('No angles to extract equations from.');
+        }
         const data = deepClone({
             angles: this.angles,
             lines: this.lines,
@@ -715,9 +718,11 @@ export class Creator extends GeometryTool {
                     name: `${angle.name}${angle.label ? ` - ${angle.label}` : ''}`,
                     pointId: `${angle.pointId}${angle.hide ? ' - hide' : ''}`,
                     sidepoints: `${angle.sidepoints.join(',')}`,
-                    value: angle.value ? `${angle.value}°` : '-',
                     radius: angle.radius || 30
                 };
+                if (angle.value) {
+                    Reflect.set(a, 'value', angle.value + '°');
+                }
                 return a;
             }),
             circles: this.circles.map(circle => {

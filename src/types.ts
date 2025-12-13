@@ -476,7 +476,7 @@ export interface AngleEditRequestData {
 
 /** Parameters for angle update event */
 export interface UpdateAngleData {
-    angleData: Angle;
+    angle: Angle;
     name: string;
     label: string;
     value: number;

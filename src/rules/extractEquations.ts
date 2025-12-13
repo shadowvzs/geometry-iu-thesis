@@ -731,7 +731,7 @@ export const cleanEquationsForWolfram = (equations: string[]): string[] => {
  */
 export const generateWolframUrl = (equations: string[]): string => {
     const cleanedEquations = cleanEquationsForWolfram(equations);
-    const wolframQuery = 'solve ' + cleanedEquations.join(', ');
+    const wolframQuery = 'solve {' + cleanedEquations.join(', ')+'}';
     const encodedQuery = encodeURIComponent(wolframQuery);
     return `https://www.wolframalpha.com/input?i=${encodedQuery}`;
 };

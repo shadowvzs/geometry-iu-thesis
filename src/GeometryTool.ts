@@ -847,7 +847,7 @@ export class GeometryTool {
                 if (!pointGroupElement) {
                     throw new Error('pointId not found');
                 }
-                const pointId = pointGroupElement.dataset.pointId;
+                const pointId = pointGroupElement.getAttribute('data-pointId');
                 if (!pointId) {
                     throw new Error('pointId not found');
                 }
@@ -2237,30 +2237,30 @@ export class GeometryTool {
     }
 
     public updateAngle(data: UpdateAngleData) {
-        const { angleData, name, label, value, radius } = data;
+        const { angle, name, label, value, radius } = data;
         let linkedUpdated = false;
         
         // Update name
         if (name !== undefined) {
-            angleData.name = name;
+            angle.name = name;
         }
         
         // Update label (allow empty string to clear label)
         if (label !== undefined) {
-            angleData.label = label;
+            angle.label = label;
             // Update text display when label changes
-            if (angleData.groupElement) {
-                const textEl = angleData.groupElement.querySelector('text');
+            if (angle.groupElement) {
+                const textEl = angle.groupElement.querySelector('text');
                 if (textEl) {
-                    textEl.textContent = getAngleDisplayText(angleData);
+                    textEl.textContent = getAngleDisplayText(angle);
                 }
             }
             
             // Propagate label to overlapping angles (angles that represent the same geometric angle)
-            if (this.overlappingAngles && this.overlappingAngles.has(angleData.id)) {
-                const overlappingSet = this.overlappingAngles.get(angleData.id) || [];
+            if (this.overlappingAngles && this.overlappingAngles.has(angle.id)) {
+                const overlappingSet = this.overlappingAngles.get(angle.id) || [];
                 overlappingSet.forEach(overlapId => {
-                    if (overlapId !== angleData.id) {
+                    if (overlapId !== angle.id) {
                         const overlapAngle = this.angles.find(a => a.id === overlapId);
                         if (overlapAngle) {
                             overlapAngle.label = label;
@@ -2280,23 +2280,23 @@ export class GeometryTool {
         
         // Update value
         if (value) {
-            angleData.value = value;
+            angle.value = value;
             
             // Update text element if it exists (won't exist for hidden overlapping angles)
-            if (angleData.groupElement) {
-                const textEl = angleData.groupElement.querySelector('text');
+            if (angle.groupElement) {
+                const textEl = angle.groupElement.querySelector('text');
                 if (textEl) {
-                    textEl.textContent = getAngleDisplayText(angleData);
+                    textEl.textContent = getAngleDisplayText(angle);
                 }
                 // Redraw the arc in case it needs to change from arc to square corner (or vice versa)
-                this.redrawAngleArc(angleData);
+                this.redrawAngleArc(angle);
             }
             
             // Check if this angle has overlapping angles
-            if (this.overlappingAngles && this.overlappingAngles.has(angleData.id)) {
-                const overlappingSet = this.overlappingAngles.get(angleData.id) || [];
+            if (this.overlappingAngles && this.overlappingAngles.has(angle.id)) {
+                const overlappingSet = this.overlappingAngles.get(angle.id) || [];
                 overlappingSet.forEach(overlapId => {
-                    if (overlapId !== angleData.id) {
+                    if (overlapId !== angle.id) {
                         const overlapAngle = this.angles.find(a => a.id === overlapId);
                         if (overlapAngle) {
                             overlapAngle.value = value;
@@ -2315,9 +2315,9 @@ export class GeometryTool {
             }
             
             // Check if this angle has a linked angle (from bisection)
-            if (this.linkedAngles && angleData.sidepoints) {
-                const neighborIds = [...angleData.sidepoints].sort((a, b) => a.localeCompare(b));
-                const angleKey = `${angleData.pointId}-${neighborIds[0]}-${neighborIds[1]}`;
+            if (this.linkedAngles && angle.sidepoints) {
+                const neighborIds = [...angle.sidepoints].sort((a, b) => a.localeCompare(b));
+                const angleKey = `${angle.pointId}-${neighborIds[0]}-${neighborIds[1]}`;
                 
                 const linkedAngleKey = this.linkedAngles.get(angleKey);
                 
@@ -2346,21 +2346,21 @@ export class GeometryTool {
                 }
             }
         } else {
-            angleData.value = null;
-            if (angleData.groupElement) {
-                const textEl = angleData.groupElement.querySelector('text');
+            angle.value = null;
+            if (angle.groupElement) {
+                const textEl = angle.groupElement.querySelector('text');
                 if (textEl) {
-                    textEl.textContent = getAngleDisplayText(angleData);
+                    textEl.textContent = getAngleDisplayText(angle);
                 }
                 // Redraw in case it was a 90-degree angle that should no longer be a square
-                this.redrawAngleArc(angleData);
+                this.redrawAngleArc(angle);
             }
             
             // Clear value for overlapping angles too
-            if (this.overlappingAngles && this.overlappingAngles.has(angleData.id)) {
-                const overlappingSet = this.overlappingAngles.get(angleData.id) || [];
+            if (this.overlappingAngles && this.overlappingAngles.has(angle.id)) {
+                const overlappingSet = this.overlappingAngles.get(angle.id) || [];
                 overlappingSet.forEach(overlapId => {
-                    if (overlapId !== angleData.id) {
+                    if (overlapId !== angle.id) {
                         const overlapAngle = this.angles.find(a => a.id === overlapId);
                         if (overlapAngle) {
                             overlapAngle.value = null;
@@ -2379,8 +2379,8 @@ export class GeometryTool {
         
         // Update radius if changed
         if (!isNaN(radius) && radius >= 10 && radius <= 100) {
-            angleData.radius = radius;
-            this.redrawAngleArc(angleData);
+            angle.radius = radius;
+            this.redrawAngleArc(angle);
         }
         
         if (linkedUpdated) {
