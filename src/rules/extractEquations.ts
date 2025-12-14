@@ -40,10 +40,13 @@ export const extractEquations = (data: SolveDataWithMaps): string[] => {
     // 7. Mirror (vertical) angles equations
     extractMirrorAnglesEquations(data, equations);
     
-    // 8. Known values
+    // 8. Full circle (360°) equations for vertices with 3+ angles
+    extractFullCircleEquations(data, equations);
+    
+    // 9. Known values
     extractKnownValues(data, equations);
     
-    // 9. Label assignments (∠ADE=α)
+    // 10. Label assignments (∠ADE=α)
     extractLabelAssignments(data, equations);
     
     // Deduplicate equations
@@ -459,6 +462,72 @@ const extractMirrorAnglesEquations = (
                 }
             }
         }
+    });
+};
+
+/**
+ * Full circle: angles around a point with 3+ edges sum to 360°
+ * This is more general than line intersections - works with any vertex where
+ * angles form a complete circle.
+ */
+const extractFullCircleEquations = (
+    { angleMapsByPointId, points }: SolveDataWithMaps,
+    equations: string[]
+): void => {
+    Object.keys(angleMapsByPointId).forEach(vertex => {
+        const anglesAtVertex = angleMapsByPointId[vertex];
+        
+        if (anglesAtVertex.length < 3) return;
+
+        const vertexPoint = points.find(p => p.id === vertex);
+        if (!vertexPoint) return;
+
+        // Get all rays (sidepoints) emanating from this vertex
+        const allRays = new Set<string>();
+        anglesAtVertex.forEach(angle => {
+            angle.sidepoints.forEach(sp => allRays.add(sp));
+        });
+
+        const rays = Array.from(allRays);
+        if (rays.length < 3) return;
+
+        // Sort rays by angle from vertex (counterclockwise from positive x-axis)
+        const sortedRays = rays
+            .map(id => {
+                const p = points.find(pt => pt.id === id);
+                if (!p) return null;
+                return { id, angle: pointToAngle(p, vertexPoint) };
+            })
+            .filter((r): r is { id: string; angle: number } => r !== null)
+            .sort((a, b) => a.angle - b.angle)
+            .map(r => r.id);
+
+        // Build list of consecutive angles around the vertex
+        const circleAngles: Angle[] = [];
+        for (let i = 0; i < sortedRays.length; i++) {
+            const ray1 = sortedRays[i];
+            const ray2 = sortedRays[(i + 1) % sortedRays.length];
+            
+            const angle = anglesAtVertex.find(a =>
+                a.sidepoints.includes(ray1) && a.sidepoints.includes(ray2)
+            );
+            
+            if (angle) {
+                circleAngles.push(angle);
+            }
+        }
+
+        // Check if we have a complete circle (number of angles equals number of rays)
+        if (circleAngles.length !== allRays.size) return;
+
+        // Validate geometrically - calculated values should sum to ~360°
+        const calculatedSum = circleAngles.reduce((sum, a) => 
+            sum + (a.calculatedValue ?? 0), 0
+        );
+        if (Math.abs(calculatedSum - 360) > 30) return;
+
+        // Add the full circle equation: ∠A+∠B+∠C+...=360
+        equations.push(`${circleAngles.map(a => a.name).join('+')}=360`);
     });
 };
 

@@ -65,7 +65,7 @@ interface RenderPointGroupParams {
     y: number;
 }
 
-export const renderPointGroup = ({ id, hide, x, y }: RenderPointGroupParams): HTMLElement => {
+export const renderPointGroup = ({ id, hide, x, y }: RenderPointGroupParams, mode: 'creator' | 'solver', scale: number = 1): HTMLElement => {
     const classes = ['point-group'];
     if (hide) classes.push(CREATOR_ONLY_CLASS);
     const group = createElement('g', {
@@ -76,7 +76,7 @@ export const renderPointGroup = ({ id, hide, x, y }: RenderPointGroupParams): HT
         class: 'point-circle',
         cx: x,
         cy: y,
-        r: 8
+        r: 8 * scale
     });
     
     const text = createElement('text', {
@@ -88,6 +88,9 @@ export const renderPointGroup = ({ id, hide, x, y }: RenderPointGroupParams): HT
     group.setAttribute('data-pointId', id);
     circle.setAttribute('data-pointId', id);
     text.setAttribute('data-pointId', id);
+    if (mode === 'solver') {
+        text.style.display ='none';
+    }
 
     group.appendChild(circle);
     group.appendChild(text);

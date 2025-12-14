@@ -20,18 +20,20 @@ import type {
     PointClickData,
     PointCreateRequestData,
     PointDraggingData,
-    SerializedGeometryData
+    SerializedGeometryData,
 } from './types';
 import { GeometryTool } from './GeometryTool';
 import { getSvgElementData } from './utils/elementHelper';
+import { makeResponsiveToScreenSize } from './utils/scaling';
 
 export class Solver extends GeometryTool {
     // Solver-specific properties
-    initialProblem: string | null;
-    initialData: any = null;
+    public initialProblem: string | null;
+    public initialData: any = null;
+    public scale: number = 1;
 
     constructor(initialProblem: string | null = null) {
-        super();
+        super('solver');
         this.initialProblem = initialProblem;
         this.initialize();
     }
@@ -50,6 +52,7 @@ export class Solver extends GeometryTool {
         // Initialize toolbar buttons - use messaging hub
         const { registerButton, registerFeedback } = this.ui.toolbar;
         registerFeedback();
+        registerButton('toggleResultPanel', () => this.ui.panels.togglePanel('result'));
         registerButton('drawPoint', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'addPoint'));
         registerButton('drawCircle', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'drawCircle'));
         registerButton('drawEdge', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'drawEdge'));
@@ -223,6 +226,10 @@ export class Solver extends GeometryTool {
     }
 
     loadData = (rawData: SerializedGeometryData) => {
+        // hide or non given or non target angles
+        rawData.angles
+            .filter(angle => Boolean(angle.t || angle.v === null || angle.v === undefined))
+            .forEach(angle => { angle.h = 1; });
         super.loadData(rawData);
     }
 
@@ -233,14 +240,19 @@ export class Solver extends GeometryTool {
     // --- end inherited methods ---
 
     // --- Solver-specific methods ---
-
     initProblem = () => {
         const data = deserializeStateFromUrl(this.initialProblem);
         if (data) {
             // hide all angle without value or if it is not a target
+            const scaleData = makeResponsiveToScreenSize(data);
+            this.scale = scaleData.scale;
+            this.svg.style.minHeight = `${scaleData.canvasHeight}px`;
             data.angles
                 .filter(angle => Boolean(angle.t || angle.v === null || angle.v === undefined))
                 .forEach(angle => { angle.h = 1; });
+
+            // make it responsive to the screen size
+
             this.loadData(data);
         }
 

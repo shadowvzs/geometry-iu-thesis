@@ -37,7 +37,7 @@ const runAllTests = () => {
             }
 
             // Enrich the data
-            const enrichedData = enrichGeometryData(normalizedData);
+            const enrichedData = enrichGeometryData(normalizedData, 1);
 
             // Count angles
             const anglesCount = enrichedData.angles.length;

@@ -1,0 +1,35 @@
+{
+  "name": "A circle where 3 point from the circle line connected to the center form 3 isosceles triangles and the middle point has 3 angle, total sum is 360",
+  "points": [
+    { "id": "A", "x": 337, "y": 256 },
+    { "id": "B", "x": 276, "y": 97 },
+    { "id": "C", "x": 265, "y": 411 },
+    { "id": "D", "x": 506, "y": 243 }
+  ],
+  "edges": [
+    { "p": ["A", "B"] },
+    { "p": ["C", "D"] },
+    { "p": ["D", "A"] },
+    { "p": ["A", "C"] },
+    { "p": ["C", "B"] },
+    { "p": ["B", "D"] }
+  ],
+  "circles": [
+    { "id": "A", "r": 170, "p": ["B", "C", "D"] }
+  ],
+  "angles": [
+    { "id": "A", "p": ["B", "C"] },
+    { "id": "A", "p": ["D", "C"] },
+    { "id": "A", "p": ["B", "D"], "t": 1 },
+    { "id": "D", "p": ["C", "B"] },
+    { "id": "B", "p": ["C", "D"] },
+    { "id": "C", "p": ["D", "B"] },
+    { "id": "B", "p": ["A", "D"] },
+    { "id": "D", "p": ["A", "B"] },
+    { "id": "D", "p": ["C", "A"], "v": 30 },
+    { "id": "C", "p": ["D", "A"] },
+    { "id": "C", "p": ["A", "B"] },
+    { "id": "B", "p": ["A", "C"], "v": 23 }
+  ],
+  "lines": []
+}

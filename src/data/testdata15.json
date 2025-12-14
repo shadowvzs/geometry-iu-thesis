@@ -1,63 +1,23 @@
 {
-    "name": "Equilateral triangle with two circles, one circle is centered at point A, the other circle is centered at point B, circle intersection point is C",
-    "points": [
-        {
-            "id": "A",
-            "x": 519,
-            "y": 281
-        },
-        {
-            "id": "B",
-            "x": 357,
-            "y": 295
-        },
-        {
-            "id": "C",
-            "x": 425,
-            "y": 147
-        }
-    ],
-    "edges": [
-        {
-            "p": ["A", "B"]
-        },
-        {
-            "p": ["C", "B"]
-        },
-        {
-            "p": ["A", "C"]
-        }
-    ],
-    "circles": [
-        {
-            "id": "A",
-            "x": 519,
-            "y": 281,
-            "r": 163,
-            "p": ["B", "C"]
-        },
-        {
-            "id": "B",
-            "x": 357,
-            "y": 295,
-            "r": 163,
-            "p": ["A", "C"]
-        }
-    ],
-    "angles": [
-        {
-            "id": "B",
-            "p": ["A", "C"]
-        },
-        {
-            "id": "A",
-            "p": ["B", "C"]
-        },
-        {
-            "id": "C",
-            "p": ["B", "A"]
-        }
-    ],
-    "lines": []
+  "name": "Equilateral triangle with two circles, one circle is centered at point A, the other circle is centered at point B, circle intersection point is C",
+  "points": [
+    { "id": "A", "x": 519, "y": 281 },
+    { "id": "B", "x": 357, "y": 295 },
+    { "id": "C", "x": 425, "y": 147 }
+  ],
+  "edges": [
+    { "p": ["A", "B"] },
+    { "p": ["C", "B"] },
+    { "p": ["A", "C"] }
+  ],
+  "circles": [
+    { "id": "A", "r": 163, "p": ["B", "C"] },
+    { "id": "B", "r": 163, "p": ["A", "C"] }
+  ],
+  "angles": [
+    { "id": "B", "p": ["A", "C"] },
+    { "id": "A", "p": ["B", "C"] },
+    { "id": "C", "p": ["B", "A"] }
+  ],
+  "lines": []
 }
-

@@ -5,6 +5,7 @@ import {
     getUnsolvedAngles,
     sumOfSolvedAnglesValue,
 } from '../utils/mathHelper';
+import { validateAngleValue } from '../utils/angleValidation';
 
 type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
 
@@ -26,7 +27,8 @@ const isValidSupplementaryPath = (angles: Angle[], tolerance: number = 10): bool
     return Math.abs(sum - 180) <= tolerance;
 };
 
-export const applySupplementaryAngles = ({ angleMapsByPointId, lines, points }: SolveDataWithMaps, log: LogFn): boolean => {
+export const applySupplementaryAngles = (data: SolveDataWithMaps, log: LogFn): boolean => {
+    const { angleMapsByPointId, lines, points, angles, triangles } = data;
     let changesMade = false;
 
     const allSupplementaryGroups: SupplementaryGroup[] = [];
@@ -173,6 +175,13 @@ export const applySupplementaryAngles = ({ angleMapsByPointId, lines, points }: 
             const value = sumTo - sumOfKnownAnglesVal;
             // Validate the result is in a reasonable range
             if (value <= 0 || value > 180) return;
+            
+            // Validate against all constraints
+            const validation = validateAngleValue(unknownAngles[0], value, {
+                angles, points, triangles
+            });
+            if (!validation.valid) return;
+            
             unknownAngles[0].value = value;
             log(
                 unknownAngles[0],
@@ -190,6 +199,16 @@ export const applySupplementaryAngles = ({ angleMapsByPointId, lines, points }: 
             const angleValue = (sumTo - sumOfKnownAnglesVal) / sameLabelAngles.length;
             // Validate the result is in a reasonable range
             if (angleValue <= 0 || angleValue > 180) return;
+            
+            // Validate all angles against constraints
+            const allValid = sameLabelAngles.every(angle => {
+                const validation = validateAngleValue(angle, angleValue, {
+                    angles, points, triangles
+                });
+                return validation.valid;
+            });
+            if (!allValid) return;
+            
             sameLabelAngles.forEach(angle => {
                 angle.value = angleValue;
                 log(

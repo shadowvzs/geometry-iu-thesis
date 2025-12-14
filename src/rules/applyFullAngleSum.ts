@@ -1,38 +1,44 @@
 import type { SolveDataWithMaps } from '@/utils/solve';
-import type { Angle, Point, Line } from '../types';
+import type { Angle, Point } from '../types';
 import {
     pointToAngle,
     getUnsolvedAngles,
     sumOfSolvedAnglesValue,
+    getAngleValue,
 } from '../utils/mathHelper';
+import { validateAngleValue } from '../utils/angleValidation';
 
 type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
 
+interface FullCircleGroup {
+    angles: Angle[];
+    vertex: string;
+    sumTo: number; // Usually 360, but can be partial (e.g., 360 - known angles)
+}
+
 /**
- * Rule: All angles around an intersection point sum to 360°
+ * Rule: All angles around a point with 3+ edges sum to 360°
  * 
- * When a point is in the middle of 2 or more lines (not at endpoints),
- * all angles around that point must sum to 360°.
+ * This is more general than just intersection points.
+ * Works with ANY point where angles form a complete circle.
  * 
- * Example: Point E an intersection between multiple lines [A,E,B] and [C,E,D]
- * Then: ∠AEC + ∠CEB + ∠BED + ∠DEA = 360°
+ * Handles:
+ * 1. Single unknown: 360 - sum of known
+ * 2. All unknowns with same label: 360 / count (or (360 - knownSum) / count)
+ * 3. Partial combinations of consecutive angles
+ * 4. Vertical angles (opposite angles at 4-way intersection are equal)
  */
 export const applyFullAngleSum = (
-    { angleMapsByPointId, lines, points }: SolveDataWithMaps,
+    data: SolveDataWithMaps,
     log: LogFn
 ): boolean => {
+    const { angleMapsByPointId, points, angles, triangles } = data;
     let changesMade = false;
 
-    // Find intersection points: points that are in the MIDDLE of 2+ lines
-    const intersectionPoints = findIntersectionPoints(lines);
-
-    if (intersectionPoints.length === 0) {
-        return false;
-    }
-
-    intersectionPoints.forEach(vertex => {
+    // Process all vertices that have at least 3 angles
+    Object.keys(angleMapsByPointId).forEach(vertex => {
         const anglesAtVertex = angleMapsByPointId[vertex];
-        
+
         if (!anglesAtVertex || anglesAtVertex.length < 3) {
             // Need at least 3 angles to use this rule meaningfully
             return;
@@ -41,123 +47,177 @@ export const applyFullAngleSum = (
         const vertexPoint = points.find(p => p.id === vertex);
         if (!vertexPoint) return;
 
-        // Get all angles around this vertex that form a complete circle
-        const allAnglesAroundVertex = getAllAnglesAroundVertex(
+        // Get all angles around this vertex sorted by angular position
+        const sortedAngles = getSortedAnglesAroundVertex(
             anglesAtVertex,
             points,
             vertexPoint
         );
 
-        if (allAnglesAroundVertex.length < 3) {
-            // Need at least 3 angles to form meaningful equations
+        if (sortedAngles.length < 3) {
             return;
         }
 
-        // Check if we have a complete set of angles (they should cover 360°)
-        if (!isCompleteAngleSet(allAnglesAroundVertex, vertex, lines)) {
+        // Check if we have a complete circle of angles
+        const allRays = new Set<string>();
+        sortedAngles.forEach(a => a.sidepoints.forEach(sp => allRays.add(sp)));
+
+        if (sortedAngles.length !== allRays.size) {
+            // Not a complete circle
             return;
         }
 
         // Validate geometrically - calculated values should sum to ~360°
-        const calculatedSum = allAnglesAroundVertex.reduce((sum, a) => 
+        const calculatedSum = sortedAngles.reduce((sum, a) => 
             sum + (a.calculatedValue ?? 0), 0
         );
-        if (Math.abs(calculatedSum - 360) > 20) {
+
+        if (Math.abs(calculatedSum - 360) > 30) {
             // Calculated values don't match expected 360°, skip
             return;
         }
 
-        const unsolvedAngles = getUnsolvedAngles(allAnglesAroundVertex);
+        // ============================================
+        // Case 1: Handle the full circle (sum = 360)
+        // ============================================
+        changesMade = tryToSolve({
+            angles: sortedAngles,
+            vertex,
+            sumTo: 360
+        }, log, { angles, points, triangles }) || changesMade;
+
+        // ============================================
+        // Case 2: Generate all consecutive subsets
+        // Similar to applyComposedAngles approach
+        // ============================================
+        const n = sortedAngles.length;
         
-        if (unsolvedAngles.length === 0) {
-            // All angles already solved
-            return;
-        }
-
-        // Calculate sum of known angles
-        const knownSum = sumOfSolvedAnglesValue(allAnglesAroundVertex);
-        const solvedCount = allAnglesAroundVertex.length - unsolvedAngles.length;
-
-        // If only one angle is unknown, we can solve it directly
-        if (unsolvedAngles.length === 1 && solvedCount >= 2) {
-            const remaining = 360 - knownSum;
-            
-            if (remaining > 0 && remaining < 360) {
-                unsolvedAngles[0].value = remaining;
+        // Generate all consecutive subsets (wrapping around for a circle)
+        for (let start = 0; start < n; start++) {
+            for (let len = 2; len < n; len++) {
+                const subset: Angle[] = [];
+                const complement: Angle[] = [];
                 
-                const solvedAngleNames = allAnglesAroundVertex
-                    .filter(a => a.value !== null && a.value !== undefined)
-                    .map(a => `${a.name}=${a.value}°`)
-                    .join(', ');
+                for (let i = 0; i < n; i++) {
+                    const idx = (start + i) % n;
+                    if (i < len) {
+                        subset.push(sortedAngles[idx]);
+                    } else {
+                        complement.push(sortedAngles[idx]);
+                    }
+                }
                 
-                log(
-                    unsolvedAngles[0],
-                    `Full angle sum at intersection ${vertex}: 360° - (${solvedAngleNames}) = 360° - ${knownSum}° = ${remaining}°`,
-                    'applyFullAngleSum'
-                );
-                changesMade = true;
-            }
-        }
-
-        // If two angles with same label are unknown, and we know the rest
-        if (unsolvedAngles.length === 2 && solvedCount >= 1) {
-            const [angle1, angle2] = unsolvedAngles;
-            
-            // Check if they have the same label
-            if (angle1.label && angle1.label === angle2.label) {
-                const remaining = 360 - knownSum;
-                
-                if (remaining > 0) {
-                    const value = remaining / 2;
-                    angle1.value = value;
-                    angle2.value = value;
+                // If complement is fully known, we can deduce subset sums
+                const unknownComplement = getUnsolvedAngles(complement);
+                if (unknownComplement.length === 0 && complement.length > 0) {
+                    const complementSum = sumOfSolvedAnglesValue(complement);
+                    const subsetSumTo = 360 - complementSum;
                     
-                    log(
-                        angle1,
-                        `Full angle sum at intersection ${vertex}: same label angles, (360° - ${knownSum}°) / 2 = ${value}°`,
-                        'applyFullAngleSum'
-                    );
-                    log(
-                        angle2,
-                        `Same label as ${angle1.name} = ${value}°`,
-                        'applyFullAngleSum'
-                    );
-                    changesMade = true;
+                    if (subsetSumTo > 0 && subsetSumTo < 360) {
+                        changesMade = tryToSolve({
+                            angles: subset,
+                            vertex,
+                            sumTo: subsetSumTo
+                        }, log, { angles, points, triangles }) || changesMade;
+                    }
                 }
             }
         }
 
-        // Handle vertical angles (opposite angles at intersection are equal)
-        // If we have 4 rays forming 2 lines, opposite angles are equal
-        if (allAnglesAroundVertex.length === 4) {
-            // Angles at index 0 and 2 are vertical (opposite)
-            // Angles at index 1 and 3 are vertical (opposite)
+        // ============================================
+        // Case 3: Vertical angles (for 4-angle intersections)
+        // Opposite angles are equal
+        // ============================================
+        if (sortedAngles.length === 4) {
             const pairs = [
-                [allAnglesAroundVertex[0], allAnglesAroundVertex[2]],
-                [allAnglesAroundVertex[1], allAnglesAroundVertex[3]]
+                [sortedAngles[0], sortedAngles[2]],
+                [sortedAngles[1], sortedAngles[3]]
             ];
 
             pairs.forEach(([a1, a2]) => {
-                if (a1.value !== null && a1.value !== undefined && 
-                    (a2.value === null || a2.value === undefined)) {
-                    a2.value = a1.value;
-                    log(
-                        a2,
-                        `Vertical angles at intersection ${vertex}: ${a2.name} = ${a1.name} = ${a2.value}°`,
-                        'applyFullAngleSum'
-                    );
+                const v1 = getAngleValue(a1);
+                const v2 = getAngleValue(a2);
+                
+                if (v1 !== null && v2 === null) {
+                    // Validate before setting
+                    const validation = validateAngleValue(a2, v1, { angles, points, triangles });
+                    if (!validation.valid) return;
+                    
+                    a2.value = v1;
+                    log(a2, `Vertical angles: ${a2.name} = ${a1.name} = ${v1}°`, 'applyFullAngleSum');
                     changesMade = true;
-                } else if (a2.value !== null && a2.value !== undefined && 
-                           (a1.value === null || a1.value === undefined)) {
-                    a1.value = a2.value;
-                    log(
-                        a1,
-                        `Vertical angles at intersection ${vertex}: ${a1.name} = ${a2.name} = ${a1.value}°`,
-                        'applyFullAngleSum'
-                    );
+                } else if (v2 !== null && v1 === null) {
+                    // Validate before setting
+                    const validation = validateAngleValue(a1, v2, { angles, points, triangles });
+                    if (!validation.valid) return;
+                    
+                    a1.value = v2;
+                    log(a1, `Vertical angles: ${a1.name} = ${a2.name} = ${v2}°`, 'applyFullAngleSum');
                     changesMade = true;
                 }
             });
+
+            // Also: if 2 adjacent angles are known, opposite pair sums to 360 - known pair
+            for (let i = 0; i < 4; i++) {
+                const a1 = sortedAngles[i];
+                const a2 = sortedAngles[(i + 1) % 4];
+                const a3 = sortedAngles[(i + 2) % 4];
+                const a4 = sortedAngles[(i + 3) % 4];
+
+                const v1 = getAngleValue(a1);
+                const v2 = getAngleValue(a2);
+                const v3 = getAngleValue(a3);
+                const v4 = getAngleValue(a4);
+
+                // If adjacent pair is known, opposite pair sums to 360 - their sum
+                if (v1 !== null && v2 !== null && v3 === null && v4 === null) {
+                    const knownSum = v1 + v2;
+                    const remainingSum = 360 - knownSum;
+                    
+                    // a3 and a4 are vertical, so they're equal
+                    // Each = remainingSum / 2
+                    if (a3.label && a3.label === a4.label) {
+                        const value = remainingSum / 2;
+                        if (value > 0 && value < 180) {
+                            // Validate both
+                            const v3Valid = validateAngleValue(a3, value, { angles, points, triangles });
+                            const v4Valid = validateAngleValue(a4, value, { angles, points, triangles });
+                            if (!v3Valid.valid || !v4Valid.valid) continue;
+                            
+                            a3.value = value;
+                            a4.value = value;
+                            log(a3, `360° - (${a1.name} + ${a2.name}) = ${remainingSum}°, same label, each = ${value}°`, 'applyFullAngleSum');
+                            log(a4, `Same as ${a3.name} = ${value}°`, 'applyFullAngleSum');
+                            changesMade = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ============================================
+        // Case 4: n angles, all with same label
+        // Each angle = 360 / n
+        // ============================================
+        if (sortedAngles.length >= 3) {
+            const firstLabel = sortedAngles[0]?.label;
+            if (firstLabel && sortedAngles.every(a => a.label === firstLabel && getAngleValue(a) === null)) {
+                const value = 360 / sortedAngles.length;
+                if (value > 0 && value < 180) {
+                    // Validate all
+                    const allValid = sortedAngles.every(a => {
+                        const validation = validateAngleValue(a, value, { angles, points, triangles });
+                        return validation.valid;
+                    });
+                    if (!allValid) return;
+                    
+                    sortedAngles.forEach(a => {
+                        a.value = value;
+                        log(a, `${sortedAngles.length} same-label angles around vertex sum to 360°, each = ${value}°`, 'applyFullAngleSum');
+                        changesMade = true;
+                    });
+                }
+            }
         }
     });
 
@@ -165,37 +225,163 @@ export const applyFullAngleSum = (
 };
 
 /**
- * Find points that are in the middle of 2 or more lines
+ * Try to solve a group of angles that sum to a specific value
  */
-function findIntersectionPoints(lines: Line[]): string[] {
-    const pointLineCount = new Map<string, number>();
+function tryToSolve(
+    group: FullCircleGroup, 
+    log: LogFn,
+    validationData: { angles: Angle[]; points: Point[]; triangles: any[] }
+): boolean {
+    const { angles, vertex, sumTo } = group;
+    let changesMade = false;
+    
+    const unknownAngles = getUnsolvedAngles(angles);
+    const knownSum = sumOfSolvedAnglesValue(angles);
+    const remaining = sumTo - knownSum;
+    
+    if (unknownAngles.length === 0) {
+        return false; // All solved
+    }
 
-    lines.forEach(line => {
-        // Only count points in the MIDDLE of the line (not first or last)
-        for (let i = 1; i < line.points.length - 1; i++) {
-            const pointId = line.points[i];
-            pointLineCount.set(pointId, (pointLineCount.get(pointId) ?? 0) + 1);
+    // Case A: Single unknown
+    if (unknownAngles.length === 1) {
+        if (remaining > 0 && remaining < 360) {
+            // Validate against all constraints
+            const validation = validateAngleValue(unknownAngles[0], remaining, validationData);
+            if (!validation.valid) return false;
+            
+            unknownAngles[0].value = remaining;
+            log(
+                unknownAngles[0],
+                `Angles at ${vertex} sum to ${sumTo}°: ${unknownAngles[0].name} = ${remaining}°`,
+                'applyFullAngleSum'
+            );
+            return true;
+        }
+    }
+
+    // Case B: Multiple unknowns with same label
+    const firstLabel = unknownAngles[0]?.label;
+    if (firstLabel) {
+        const sameLabelAngles = unknownAngles.filter(a => a.label === firstLabel);
+        
+        // All unknowns have the same label
+        if (sameLabelAngles.length === unknownAngles.length) {
+            const value = remaining / sameLabelAngles.length;
+            
+            if (value > 0 && value < 360) {
+                // Validate against all constraints
+                const constraintValid = sameLabelAngles.every(a => {
+                    const validation = validateAngleValue(a, value, validationData);
+                    return validation.valid;
+                });
+                
+                if (constraintValid) {
+                    sameLabelAngles.forEach(a => {
+                        a.value = value;
+                        log(
+                            a,
+                            `Angles at ${vertex} sum to ${sumTo}°, ${sameLabelAngles.length} same-label unknowns: ${a.name} = ${value}°`,
+                            'applyFullAngleSum'
+                        );
+                        changesMade = true;
+                    });
+                }
+            }
+        }
+        // Some unknowns have same label, others don't but might be calculable
+        else if (sameLabelAngles.length > 0) {
+            const otherUnknowns = unknownAngles.filter(a => a.label !== firstLabel);
+            
+            // If other unknowns all have their calculatedValue and it's reliable
+            const otherKnownCalc = otherUnknowns.filter(a => a.calculatedValue !== undefined);
+            if (otherKnownCalc.length === otherUnknowns.length && otherUnknowns.length > 0) {
+                const otherSum = otherUnknowns.reduce((sum, a) => sum + (a.calculatedValue ?? 0), 0);
+                const sameLabelSum = remaining - otherSum;
+                const value = sameLabelSum / sameLabelAngles.length;
+                
+                if (value > 0 && value < 180) {
+                    // Validate against constraints
+                    const constraintValid = sameLabelAngles.every(a => {
+                        const validation = validateAngleValue(a, value, validationData);
+                        return validation.valid;
+                    });
+                    if (!constraintValid) return changesMade;
+                    
+                    sameLabelAngles.forEach(a => {
+                        a.value = value;
+                        log(
+                            a,
+                            `Deduced from 360° rule with calculated other angles: ${a.name} = ${value}°`,
+                            'applyFullAngleSum'
+                        );
+                        changesMade = true;
+                    });
+                }
+            }
+        }
+    }
+
+    // Case C: Check for pairs of equal angles (by label)
+    // If we have 2 unknowns with label X and the rest known
+    const labelGroups = new Map<string, Angle[]>();
+    unknownAngles.forEach(a => {
+        if (a.label) {
+            const labelGroup = labelGroups.get(a.label) || [];
+            labelGroup.push(a);
+            labelGroups.set(a.label, labelGroup);
         }
     });
 
-    // Return points that are in the middle of at least 2 lines
-    // (1 line = supplementary 180°, 2+ lines = full 360°)
-    return Array.from(pointLineCount.entries())
-        .filter(([_, count]) => count >= 2)
-        .map(([pointId]) => pointId);
+    labelGroups.forEach((groupAngles, label) => {
+        if (groupAngles.length >= 2) {
+            // Check if other unknowns can be solved first
+            const othersWithoutThisLabel = unknownAngles.filter(a => a.label !== label);
+            const othersSolved = othersWithoutThisLabel.every(a => getAngleValue(a) !== null);
+            
+            if (othersSolved || othersWithoutThisLabel.length === 0) {
+                const othersSum = othersWithoutThisLabel.reduce((sum, a) => sum + (getAngleValue(a) ?? 0), 0);
+                const remainingForGroup = remaining - othersSum;
+                const value = remainingForGroup / groupAngles.length;
+                
+                if (value > 0 && value < 180) {
+                    // Validate against constraints
+                    const constraintValid = groupAngles.every(a => {
+                        if (getAngleValue(a) !== null) return true;
+                        const validation = validateAngleValue(a, value, validationData);
+                        return validation.valid;
+                    });
+                    if (!constraintValid) return;
+                    
+                    groupAngles.forEach(a => {
+                        if (getAngleValue(a) === null) {
+                            a.value = value;
+                            log(
+                                a,
+                                `${groupAngles.length} angles with label ${label}, sum = ${remainingForGroup}°: ${a.name} = ${value}°`,
+                                'applyFullAngleSum'
+                            );
+                            changesMade = true;
+                        }
+                    });
+                }
+            }
+        }
+    });
+
+    return changesMade;
 }
 
 /**
- * Get all angles around a vertex point, sorted by their angular position
+ * Get all angles around a vertex sorted by their angular position
  */
-function getAllAnglesAroundVertex(
+function getSortedAnglesAroundVertex(
     anglesAtVertex: Angle[],
     points: Point[],
     vertexPoint: Point
 ): Angle[] {
     // Get all rays (sidepoints) emanating from this vertex
     const allRays = new Set<string>();
-    
     anglesAtVertex.forEach(angle => {
         angle.sidepoints.forEach(sp => allRays.add(sp));
     });
@@ -235,48 +421,6 @@ function getAllAnglesAroundVertex(
     }
 
     return result;
-}
-
-/**
- * Check if the angles form a complete set around the vertex
- * (number of angles equals number of rays, forming a full circle)
- */
-function isCompleteAngleSet(
-    angles: Angle[],
-    vertex: string,
-    lines: Line[]
-): boolean {
-    // Get all rays that should exist at this vertex based on lines
-    const expectedRays = new Set<string>();
-    
-    lines.forEach(line => {
-        const vertexIndex = line.points.indexOf(vertex);
-        if (vertexIndex === -1) return;
-        
-        // Add points immediately before and after vertex on this line
-        if (vertexIndex > 0) {
-            expectedRays.add(line.points[vertexIndex - 1]);
-        }
-        if (vertexIndex < line.points.length - 1) {
-            expectedRays.add(line.points[vertexIndex + 1]);
-        }
-    });
-
-    // Get all rays from the angles
-    const actualRays = new Set<string>();
-    angles.forEach(angle => {
-        angle.sidepoints.forEach(sp => actualRays.add(sp));
-    });
-
-    // Check if we have all expected rays
-    for (const ray of expectedRays) {
-        if (!actualRays.has(ray)) {
-            return false;
-        }
-    }
-
-    // Check if number of angles equals number of rays (complete circle)
-    return angles.length === actualRays.size;
 }
 
 export default applyFullAngleSum;

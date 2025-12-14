@@ -41,7 +41,7 @@ import { extractEquationsWithWolfram } from './rules/extractEquations';
 
 export class Creator extends GeometryTool {
     constructor() {
-        super();
+        super('creator');
         this.initialize();
     }
 
@@ -340,46 +340,7 @@ export class Creator extends GeometryTool {
         if (!addDefinitionBtn) {
             throw new Error('addDefinitionBtn not found');
         }
-        addDefinitionBtn.addEventListener('click', () => {
-            const input = document.getElementById('definitionInput') as HTMLInputElement;
-            if (!input) {
-                throw new Error('input not found');
-            }
-            const text = input.value.trim();
-            const addLineRegex = /\[\s*([A-Z](?:\s*,\s*[A-Z])*)\s*\]\s*\+\s*([A-Z])/;
-            const removeLineRegex = /\[\s*([A-Z](?:\s*,\s*[A-Z])*)\s*\]\s*-\s*([A-Z])/;
-            const addLine = text.match(addLineRegex);
-            const removeLine = text.match(removeLineRegex);
-            if (addLine) {
-                const [, pointListStr, newPointId] = addLine;
-                const [point1, point2] = pointListStr.split(',').map(s => s.trim());
-                const line = this.lines.find(line => isPointsOnSameLine(line, point1, point2));
-                if (!line) {
-                    const edge = this.edges.find(e => e.points.includes(point1) && e.points.includes(point2));
-                    if (edge) {
-                        const newLinePoints = sortLinePoints([...edge.points, newPointId], this.pointsMap);
-                        this.addLine(newLinePoints);
-                        this.saveState();
-                        alert(`A new line was created and point added [${newLinePoints.join(', ')}]`);
-                        return;
-                    }
-                    // const linePoints = line.map(id => this.pointsMap.get(id)).filter(p => p);
-                    return alert(`No exist line with ${point1} and ${point2}`);
-                }
-                if (!this.pointsMap.get(newPointId)) { return alert(`No exist point with ID ${newPointId}`); }
-                if (line.points.includes(newPointId)) { return alert(`Point ${newPointId} is already on the line`); }
-                line.points.push(newPointId);
-                alert('Point added to line');
-            } else if (removeLine) {
-                const [, pointListStr, newPointId] = removeLine;
-                const [point1, point2] = pointListStr.split(',').map(s => s.trim());
-                const line = this.lines.find(line => isPointsOnSameLine(line, point1, point2));
-                if (!line) { return alert('No exist line with those points'); }
-                line.points.splice(line.points.indexOf(newPointId), 1);
-                this.saveState();
-                alert('Point removed from line');
-            }
-        });
+        addDefinitionBtn.addEventListener('click', this.submitNewDefinition);
 
         // Add definition on Enter key - use messaging hub
         const definitionInput = document.getElementById('definitionInput') as HTMLInputElement;
@@ -388,13 +349,7 @@ export class Creator extends GeometryTool {
         }
         definitionInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                e.preventDefault();
-                const target = e.target as HTMLInputElement;
-                const text = target.value.trim();
-                if (text) {
-                    this.messagingHub.emit(Messages.DEFINITION_ADDED, text);
-                    target.value = '';
-                }
+                this.submitNewDefinition();
             }
         });
 
@@ -463,6 +418,49 @@ export class Creator extends GeometryTool {
         });
 
         this.updateDefinitionsPanel();
+    }
+
+    submitNewDefinition = () => {
+        const input = document.getElementById('definitionInput') as HTMLInputElement;
+        if (!input) {
+            throw new Error('input not found');
+        }
+        const text = input.value.trim();
+        const addLineRegex = /\[\s*([A-Z](?:\s*,\s*[A-Z])*)\s*\]\s*\+\s*([A-Z])/;
+        const removeLineRegex = /\[\s*([A-Z](?:\s*,\s*[A-Z])*)\s*\]\s*-\s*([A-Z])/;
+        const addLine = text.match(addLineRegex);
+        const removeLine = text.match(removeLineRegex);
+        if (addLine) {
+            const [, pointListStr, newPointId] = addLine;
+            const [point1, point2] = pointListStr.split(',').map(s => s.trim());
+            const line = this.lines.find(line => isPointsOnSameLine(line, point1, point2));
+            if (!line) {
+                const edge = this.edges.find(e => e.points.includes(point1) && e.points.includes(point2));
+                if (edge) {
+                    const newLinePoints = sortLinePoints([...edge.points, newPointId], this.pointsMap);
+                    this.addLine(newLinePoints);
+                    this.saveState();
+                    alert(`A new line was created and point added [${newLinePoints.join(', ')}]`);
+                    return;
+                }
+                // const linePoints = line.map(id => this.pointsMap.get(id)).filter(p => p);
+                return alert(`No exist line with ${point1} and ${point2}`);
+            }
+            if (!this.pointsMap.get(newPointId)) { return alert(`No exist point with ID ${newPointId}`); }
+            if (line.points.includes(newPointId)) { return alert(`Point ${newPointId} is already on the line`); }
+            line.points.push(newPointId);
+            input.value = '';
+            alert('Point added to line');
+        } else if (removeLine) {
+            const [, pointListStr, newPointId] = removeLine;
+            const [point1, point2] = pointListStr.split(',').map(s => s.trim());
+            const line = this.lines.find(line => isPointsOnSameLine(line, point1, point2));
+            if (!line) { return alert('No exist line with those points'); }
+            line.points.splice(line.points.indexOf(newPointId), 1);
+            this.saveState();
+            input.value = '';
+            alert('Point removed from line');
+        }
     }
 
     updateDefinitionsPanel = () => {

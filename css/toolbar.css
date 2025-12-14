@@ -71,6 +71,13 @@
     background: #c0392b;
 }
 
+.tool-btn.solve-btn {
+    width: auto;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
 .info {
     font-size: 12px;
     color: #ecf0f1;

@@ -1,6 +1,7 @@
 import type { SolveDataWithMaps } from '@/utils/solve';
 import type { Angle, Point } from '../types';
 import { getAngleValue } from '../utils/mathHelper';
+import { validateAngleValue } from '../utils/angleValidation';
 
 type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
 
@@ -102,7 +103,8 @@ const findCompositeAngles = (angles: Angle[], points: Point[]): CompositeGroup[]
     return compositeGroups;
 };
 
-export const applyComposedAngles = ({ angles, points }: SolveDataWithMaps, log: LogFn): boolean => {
+export const applyComposedAngles = (data: SolveDataWithMaps, log: LogFn): boolean => {
+    const { angles, points, triangles } = data;
     let changesMade = false;
     const composites = findCompositeAngles(angles, points);
     
@@ -121,6 +123,16 @@ export const applyComposedAngles = ({ angles, points }: SolveDataWithMaps, log: 
                 const unknownAngleValue = parentValue - knownSum;
                 // Validate result is in valid range
                 if (unknownAngleValue <= 0 || unknownAngleValue > 180) return;
+                
+                // Validate against all constraints
+                const validation = validateAngleValue(unknownChildren[0], unknownAngleValue, {
+                    angles, points, triangles
+                });
+                if (!validation.valid) {
+                    // Skip this value - it would violate constraints
+                    return;
+                }
+                
                 unknownChildren[0].value = unknownAngleValue;
                 log(unknownChildren[0], `Composed angle: ${parent.name} - known children = ${unknownAngleValue}°`, 'applyComposedAngles');
                 changesMade = true;
@@ -128,13 +140,23 @@ export const applyComposedAngles = ({ angles, points }: SolveDataWithMaps, log: 
                 const unknownAngleValue = (parentValue - knownSum) / sameLabelChildren.length;
                 // Validate result is in valid range
                 if (unknownAngleValue <= 0 || unknownAngleValue > 180) return;
+                
+                // Validate all same-label children against constraints
+                const allValid = sameLabelChildren.every(c => {
+                    const validation = validateAngleValue(c, unknownAngleValue, {
+                        angles, points, triangles
+                    });
+                    return validation.valid;
+                });
+                if (!allValid) return;
+                
                 sameLabelChildren.forEach(c => {
                     c.value = unknownAngleValue;
                     log(c, `Composed angle: ${c.name} = ${unknownAngleValue}°`, 'applyComposedAngles');
                     changesMade = true;
                 });
             } else if (childrenLabel && children.length - sameLabelChildren.length === 1) {
-
+                // Unfinished case - kept for future implementation
             }
         }
         
@@ -142,6 +164,16 @@ export const applyComposedAngles = ({ angles, points }: SolveDataWithMaps, log: 
             const sum = knownChildren.reduce((a, b) => a + b, 0);
             // Validate result is in valid range
             if (sum <= 0 || sum > 180) return;
+            
+            // Validate against all constraints
+            const validation = validateAngleValue(parent, sum, {
+                angles, points, triangles
+            });
+            if (!validation.valid) {
+                // Skip this value - it would violate constraints
+                return;
+            }
+            
             parent.value = sum;
             log(parent, `Composed angle: sum of children = ${sum}°`, 'applyComposedAngles');
             changesMade = true;
@@ -150,4 +182,3 @@ export const applyComposedAngles = ({ angles, points }: SolveDataWithMaps, log: 
     
     return changesMade;
 };
-

@@ -1063,7 +1063,7 @@ export const isSameRay = (p1: string, p2: string, vertex: string, lines: Line[])
     return false;
 };
 
-export const getAngleCalculatedInfo = (vertex: Point, point1: Point, point2: Point): AngleCalculatedInfo | undefined => {
+export const getAngleCalculatedInfo = (vertex: Point, point1: Point, point2: Point, scale: number = 1): AngleCalculatedInfo | undefined => {
     let angle1 = pointToAngle(vertex, point1);
     let angle2 = pointToAngle(vertex, point2);
     
@@ -1080,7 +1080,7 @@ export const getAngleCalculatedInfo = (vertex: Point, point1: Point, point2: Poi
         return;
     }
     
-    const radius = Math.round(20 + (angleDegrees / 5));
+    const radius = Math.round((25 + (angleDegrees / 10)) * scale);
     return {
         radius,
         angleDegrees,

@@ -157,10 +157,6 @@ export interface Circle {
 export interface SerializedCircle {
     /** Center point ID */
     id: string;
-    /** X coordinate of center */
-    x: number;
-    /** Y coordinate of center */
-    y: number;
     /** Radius */
     r: number;
     /** Points on the circle line */
@@ -204,6 +200,12 @@ export interface Angle {
 }
 
 /** Serialized angle for JSON storage */
+export interface ProblemScaleData {
+    scale: number;
+    canvasWidth: number;
+    canvasHeight: number;
+}
+
 export interface SerializedAngle {
     /** Vertex point ID */
     id: string;

@@ -28,5 +28,12 @@ export class PanelManager {
     getPanel = <T extends Panel>(name: string): T | undefined => {
         return this.panels.get(name) as T | undefined;
     }
+
+    togglePanel = (name: string): void => {
+        const panel = this.panels.get(name);
+        if (panel) {
+            panel.togglePanel();
+        }
+    }
 }
 

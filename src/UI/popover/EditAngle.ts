@@ -143,8 +143,47 @@ export const ShowAngleEditorPopover = ({ angle, angles = [angle] }: AngleEditReq
     const textX = textElement ? parseFloat(textElement.getAttribute('x') || '100') : 100;
     const textY = textElement ? parseFloat(textElement.getAttribute('y') || '100') : 100;
     
-    // create and setup the ui
-    const elements = createPopoverContent({ left: left + textX, top: top + textY });
+    // create and setup the ui (with temporary position)
+    const elements = createPopoverContent({ left: 0, top: 0 });
+    
+    // Mount temporarily hidden to get dimensions
+    elements.container.style.visibility = 'hidden';
+    document.body.appendChild(elements.container);
+    
+    const popoverRect = elements.container.getBoundingClientRect();
+    const popoverHeight = popoverRect.height;
+    const popoverWidth = popoverRect.width;
+    
+    // Calculate position with bounds checking
+    let finalLeft = left + textX;
+    let finalTop = top + textY;
+    
+    const padding = 10;
+    
+    // Check right edge
+    if (finalLeft + popoverWidth > window.innerWidth) {
+        finalLeft = window.innerWidth - popoverWidth - padding;
+    }
+    
+    // Check left edge
+    if (finalLeft < padding) {
+        finalLeft = padding;
+    }
+    
+    // Check bottom edge
+    if (finalTop + popoverHeight > window.innerHeight) {
+        finalTop = window.innerHeight - popoverHeight - padding;
+    }
+    
+    // Check top edge
+    if (finalTop < padding) {
+        finalTop = padding;
+    }
+    
+    // Apply corrected position and show
+    elements.container.style.left = finalLeft + 'px';
+    elements.container.style.top = finalTop + 'px';
+    elements.container.style.visibility = 'visible';
     angles.forEach(ang => {
         elements.selectField.appendChild(createElement('option', { value: ang.name }, [ang.name]));
     });
@@ -246,7 +285,6 @@ export const ShowAngleEditorPopover = ({ angle, angles = [angle] }: AngleEditReq
     //     });
     // }, 100);
 
-    // mount into the ui
-    document.body.appendChild(elements.container);
+    // Container already mounted during bounds calculation
     setAngle(angle);
 }

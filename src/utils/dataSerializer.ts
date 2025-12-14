@@ -66,8 +66,6 @@ export function serializeGeometryData(geometryData: {
         circles: circles.map(circle => {
             const serialized: SerializedCircle = {
                 id: circle.centerPoint,
-                x: Math.round(circle.centerX),
-                y: Math.round(circle.centerY),
                 r: Math.round(circle.radius)
             };
             if (circle.pointsOnLine && circle.pointsOnLine.length > 0) {
@@ -136,12 +134,16 @@ export function deserializeGeometryData(jsonData: Partial<SerializedGeometryData
     }
 
     if (jsonData.circles && Array.isArray(jsonData.circles)) {
+        const pointsMap: Record<string, Point> = {};
+        normalized.points.forEach(point => {
+            pointsMap[point.id] = point;
+        });
         normalized.circles = jsonData.circles.map((circleData: SerializedCircle) => ({
             id: circleData.id,
             element: null,
             centerPoint: circleData.id,
-            centerX: Math.round(circleData.x),
-            centerY: Math.round(circleData.y),
+            centerX: Math.round(pointsMap[circleData.id].x),
+            centerY: Math.round(pointsMap[circleData.id].y),
             radius: Math.round(circleData.r),
             pointsOnLine: circleData.p || [],
             hide: !!circleData.h
@@ -246,7 +248,7 @@ export function validateGeometryData(data: Partial<NormalizedGeometryData>): Val
     };
 }
 
-export const enrichGeometryData = (data: NormalizedGeometryData): EnrichedGeometryData => {
+export const enrichGeometryData = (data: NormalizedGeometryData, scale: number = 1): EnrichedGeometryData => {
     const adjacentPoints = new Map<string, Set<string>>();
     const angles: Angle[] = [];
     const circles: Circle[] = [];
@@ -347,7 +349,7 @@ export const enrichGeometryData = (data: NormalizedGeometryData): EnrichedGeomet
             );
             if (!angle) { return; }
 
-            const calcInfo = getAngleCalculatedInfo(vertex, point1, point2);
+            const calcInfo = getAngleCalculatedInfo(vertex, point1, point2, scale);
             if (calcInfo) {
                 const {
                     angle1,

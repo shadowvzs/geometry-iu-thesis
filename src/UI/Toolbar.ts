@@ -114,6 +114,13 @@ const getDefaultButtonConfigs = (): Record<string, ButtonConfig> => ({
         class: 'to-solver-mode',
         action: 'solveInNewTab',
         params: []
+    },
+    toggleResultPanel: {
+        icon: 'Solve',
+        title: 'Toggle Result Panel',
+        class: 'solve-btn',
+        action: 'toggleResultPanel',
+        params: []
     }
 });
 

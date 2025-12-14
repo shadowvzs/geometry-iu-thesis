@@ -64,10 +64,15 @@ export class ResultPanel extends Panel {
         document.querySelector('.container')?.appendChild(panel);
         document.querySelector('.container')?.appendChild(maximizeBtn);
 
+        // Hide panel by default
+        panel.classList.add('collapsed');
+        const toggleBtn = panel.querySelector('.toggle-result-btn');
+        if (toggleBtn) toggleBtn.textContent = '+';
+
         this.finalResultForElement = panel.querySelector('.final-result-for') as HTMLElement;
         this.inputElement = panel.querySelector('.result-input') as HTMLInputElement;
         this.submitButtonElement = panel.querySelector('.verify-result-btn') as HTMLButtonElement;
-        this.setupToggleListeners('toggleDefinitionsPanel', 'maximizeDefinitionsBtn');
+        this.setupToggleListeners('toggleResultPanel', 'maximizeResultBtn');
 
         this.submitButtonElement.onclick = this.verifyResult;
 

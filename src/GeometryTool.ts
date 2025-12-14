@@ -98,9 +98,10 @@ export class GeometryTool {
     public maxHistorySize: number = 50;
     public svg!: HTMLElement;
     public svgGroup!: SvgGroups;
+    public scale: number = 1;
     _batchUpdatingTriangles: boolean = false;
 
-    constructor() {
+    constructor(private mode: 'creator' | 'solver') {
         // Bind all methods to this instance
         this.setupMessageSubscriptions = this.setupMessageSubscriptions.bind(this);
         this.handleAngleValueCalculated = this.handleAngleValueCalculated.bind(this);
@@ -370,7 +371,7 @@ export class GeometryTool {
     public drawPoint(point: Point) {
         const classes = ['point-group'];
         if (point.hide) classes.push('hide');
-        const group = renderPointGroup(point);
+        const group = renderPointGroup(point, this.mode, this.scale);
         
         // Remove any previous references to this point first
         const existingGroup = this.svgGroup.point.querySelector(`g[data-point-id="${point.id}"]`);
@@ -1217,7 +1218,7 @@ export class GeometryTool {
                             continue; // Skip if point is collinear with either adjacent point
                         }
                         // { angleDegrees }
-                        const calculatedValues = getAngleCalculatedInfo(point, adjPoint1, adjPoint2);
+                        const calculatedValues = getAngleCalculatedInfo(point, adjPoint1, adjPoint2, this.scale);
                         if (!calculatedValues) continue;
                         angleData.push({
                             vertex: point,
@@ -1262,7 +1263,7 @@ export class GeometryTool {
         // Note: Redundant/overlapping angles are still created but marked as hidden in drawAngleArc.
         
         // Calculate angle between three points using utility functions
-        const calculatedValues = getAngleCalculatedInfo(vertex, point1, point2);
+        const calculatedValues = getAngleCalculatedInfo(vertex, point1, point2, this.scale);
         if (!calculatedValues) { return; }
         let {
             angle1,
@@ -1442,7 +1443,6 @@ export class GeometryTool {
             if (isAngleExistAlready) {
                 return;
             }
-
         }
         // Check if this angle is one of the two angles created by bisection
         // If so, don't show it as a square corner even if it's 90 degrees
@@ -1535,10 +1535,10 @@ export class GeometryTool {
         // Store the group element reference
         angleData.groupElement = group as HTMLElement;
       
-        // Hide if shouldHide (overlapping OR not in triangle and not supplementary)
-        // if (angleData.hide) {
-        //     group.style.display = 'none';
-        // }
+        // Add creator-only class if it is hidden
+        if (angleData.hide) {
+            group.classList.add('creator-only');
+        }
         
         const angleElements = Array.from(this.svgGroup.angle.querySelectorAll('.angle-group'));
         // push our new element to the array
@@ -2417,7 +2417,7 @@ export class GeometryTool {
             pointsMap,
             overlappingAngles,
             triangles
-        } = enrichGeometryData(data);
+        } = enrichGeometryData(data, this.scale);
 
 
         this.definitions = definitions;
@@ -2440,7 +2440,11 @@ export class GeometryTool {
         });
 
         // Draw points
+        const circleCenterPoints = (data.circles || []).map(circle => circle.centerPoint);
         this.points.forEach(point => {
+            if (!circleCenterPoints.includes(point.id) && this.mode === 'solver') {
+                point.hide = true;
+            }
             this.drawPoint(point);
         });
         

@@ -116,7 +116,7 @@
 .definitions-panel {
     position: fixed;
     right: 20px;
-    top: 20px;
+    top: 50px;
     width: 320px;
     max-height: 40vh;
     background: white;
@@ -237,8 +237,8 @@
     color: #95a5a6;
     text-align: center;
     font-size: 13px;
-    margin: 20px 0;
-    font-style: italic;
+    white-space: pre-wrap;
+    line-height: 12px;
 }
 
 .definition-item {
@@ -410,7 +410,7 @@
 .debug-panel {
     position: fixed;
     right: 20px;
-    top: calc(65vh + 40px);
+    top: calc(45vh + 40px);
     width: 420px;
     max-height: calc(35vh - 60px);
     background: white;

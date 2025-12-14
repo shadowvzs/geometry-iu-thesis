@@ -55,7 +55,9 @@ export class DefinitionsPanel extends Panel {
         
         if (definitions.length === 0) {
             const noDefMsg = createElement('p', { class: 'no-definitions' }) as HTMLElement;
-            noDefMsg.textContent = 'No definitions yet. Add your first definition above.';
+            noDefMsg.textContent = `
+            To add point to list: [A, B]+C\r\n
+            To remove point from list: [A, B]-C`;
             definitionsList.appendChild(noDefMsg);
             return;
         }
