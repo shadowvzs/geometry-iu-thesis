@@ -1,2 +1,2 @@
 export const NAME = 'Geometry Tool';
-export const VERSION = '0.9.8';
+export const VERSION = '1.0.0';

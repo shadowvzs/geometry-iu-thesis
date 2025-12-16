@@ -469,6 +469,8 @@ const extractMirrorAnglesEquations = (
  * Full circle: angles around a point with 3+ edges sum to 360°
  * This is more general than line intersections - works with any vertex where
  * angles form a complete circle.
+ * 
+ * Now extracts ALL valid partitions (including composed angles), not just elementary angles.
  */
 const extractFullCircleEquations = (
     { angleMapsByPointId, points }: SolveDataWithMaps,
@@ -502,16 +504,20 @@ const extractFullCircleEquations = (
             .sort((a, b) => a.angle - b.angle)
             .map(r => r.id);
 
-        // Build list of consecutive angles around the vertex
+        // Helper to find angle between two rays
+        const findAngle = (ray1: string, ray2: string): Angle | undefined => {
+            return anglesAtVertex.find(a =>
+                a.sidepoints.includes(ray1) && a.sidepoints.includes(ray2)
+            );
+        };
+
+        // Build list of consecutive (elementary) angles around the vertex
         const circleAngles: Angle[] = [];
         for (let i = 0; i < sortedRays.length; i++) {
             const ray1 = sortedRays[i];
             const ray2 = sortedRays[(i + 1) % sortedRays.length];
             
-            const angle = anglesAtVertex.find(a =>
-                a.sidepoints.includes(ray1) && a.sidepoints.includes(ray2)
-            );
-            
+            const angle = findAngle(ray1, ray2);
             if (angle) {
                 circleAngles.push(angle);
             }
@@ -526,9 +532,89 @@ const extractFullCircleEquations = (
         );
         if (Math.abs(calculatedSum - 360) > 30) return;
 
-        // Add the full circle equation: ∠A+∠B+∠C+...=360
+        // Add the elementary full circle equation: ∠A+∠B+∠C+...=360
         equations.push(`${circleAngles.map(a => a.name).join('+')}=360`);
+
+        // Find ALL valid partitions of the full circle (including composed angles)
+        const allPartitions = findAllCirclePartitions(anglesAtVertex, sortedRays, findAngle);
+        
+        // Add equations for each unique partition
+        const seenEquations = new Set<string>();
+        seenEquations.add(circleAngles.map(a => a.name).sort().join('+'));
+        
+        for (const partition of allPartitions) {
+            // Validate geometrically
+            const partitionCalcSum = partition.reduce((sum, a) => sum + (a.calculatedValue ?? 0), 0);
+            if (Math.abs(partitionCalcSum - 360) > 30) continue;
+            
+            const eqKey = partition.map(a => a.name).sort().join('+');
+            if (!seenEquations.has(eqKey)) {
+                seenEquations.add(eqKey);
+                equations.push(`${partition.map(a => a.name).join('+')}=360`);
+            }
+        }
     });
+};
+
+/**
+ * Find all valid partitions of angles around a full circle.
+ * Similar to findDecompositions in applyComposedAngles, but for circular arrangement.
+ */
+const findAllCirclePartitions = (
+    anglesAtVertex: Angle[],
+    sortedRays: string[],
+    findAngle: (ray1: string, ray2: string) => Angle | undefined
+): Angle[][] => {
+    const n = sortedRays.length;
+    if (n < 3) return [];
+    
+    const results: Angle[][] = [];
+    
+    // Helper: find all ways to partition from startIdx to endIdx (non-circular)
+    const findPartitions = (startIdx: number, endIdx: number): Angle[][] => {
+        if (startIdx === endIdx) return [[]];
+        
+        const partitions: Angle[][] = [];
+        for (let midIdx = startIdx + 1; midIdx <= endIdx; midIdx++) {
+            const angle = findAngle(sortedRays[startIdx], sortedRays[midIdx]);
+            if (angle) {
+                const subPartitions = findPartitions(midIdx, endIdx);
+                for (const subPartition of subPartitions) {
+                    partitions.push([angle, ...subPartition]);
+                }
+            }
+        }
+        return partitions;
+    };
+    
+    // For a full circle, start at ray 0 and wrap back to ray 0
+    for (let lastStart = 1; lastStart < n; lastStart++) {
+        const firstPartitions = findPartitions(0, lastStart);
+        const wrapAngle = findAngle(sortedRays[lastStart], sortedRays[0]);
+        
+        if (wrapAngle && firstPartitions.length > 0) {
+            for (const partition of firstPartitions) {
+                const fullPartition = [...partition, wrapAngle];
+                if (fullPartition.length >= 3) {
+                    results.push(fullPartition);
+                }
+            }
+        }
+    }
+    
+    // Deduplicate partitions
+    const uniquePartitions: Angle[][] = [];
+    const seen = new Set<string>();
+    
+    for (const partition of results) {
+        const key = partition.map(a => a.id).sort().join(',');
+        if (!seen.has(key)) {
+            seen.add(key);
+            uniquePartitions.push(partition);
+        }
+    }
+    
+    return uniquePartitions;
 };
 
 /**
