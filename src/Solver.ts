@@ -248,8 +248,10 @@ export class Solver extends GeometryTool {
             this.scale = scaleData.scale;
             this.svg.style.minHeight = `${scaleData.canvasHeight}px`;
             data.angles
-                .filter(angle => Boolean(angle.t || angle.v === null || angle.v === undefined))
-                .forEach(angle => { angle.h = 1; });
+                .forEach(angle => {
+                    if (angle.t || angle.l || angle.v) return;
+                    angle.h = 1;
+                });
 
             // make it responsive to the screen size
 

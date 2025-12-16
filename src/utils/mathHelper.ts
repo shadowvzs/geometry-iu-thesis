@@ -622,15 +622,22 @@ export const isEquilateralTriangleByCircles = (triangle: Triangle, circles: Circ
         if (!triangle.has(c1.centerPoint)) return false;
         // one of the triangle point must be center of the second circle
         const c2 = circles.find(c => c.centerPoint !== c1.centerPoint && triangle.has(c.centerPoint));
-        if (!c2) return false;
-        // the intersection point must be a point which both circle have on their line
-        const intersectionPoint = Array.from(triangle).filter(p => p !== c1.centerPoint && p !== c2.centerPoint).pop();
-        // something wrong with the triangle points, there is only 2 points
-        if (!intersectionPoint) return false;
+        if (!c2 || c1.id === c2.id) return false;
 
-        return c1.pointsOnLine.includes(intersectionPoint) && c2.pointsOnLine.includes(intersectionPoint);
+        if (
+            !c2.pointsOnLine.includes(c1.centerPoint) ||
+            !c1.pointsOnLine.includes(c2.centerPoint)
+        ) {
+            return false;
+        }
+
+        const remainingPoints = Array.from(triangle).filter(p => p !== c1.centerPoint && p !== c2.centerPoint);
+        return (
+            remainingPoints.length === 1 && 
+            c1.pointsOnLine.includes(remainingPoints[0]) &&
+            c2.pointsOnLine.includes(remainingPoints[0])
+        );
     });
-
 };
 
 export const isEquilateralTriangleByLabel = (triangleAngles: Angle[]): boolean => {
