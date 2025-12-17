@@ -611,7 +611,7 @@ const extractFullCircleEquations = (
         equations.push(`${circleAngles.map(a => a.name).join('+')}=360`);
 
         // Find ALL valid partitions of the full circle (including composed angles)
-        const allPartitions = findAllCirclePartitions(anglesAtVertex, sortedRays, findAngle);
+        const allPartitions = findAllCirclePartitions(sortedRays, findAngle);
         
         // Add equations for each unique partition
         const seenEquations = new Set<string>();
@@ -636,7 +636,6 @@ const extractFullCircleEquations = (
  * Similar to findDecompositions in applyComposedAngles, but for circular arrangement.
  */
 const findAllCirclePartitions = (
-    anglesAtVertex: Angle[],
     sortedRays: string[],
     findAngle: (ray1: string, ray2: string) => Angle | undefined
 ): Angle[][] => {

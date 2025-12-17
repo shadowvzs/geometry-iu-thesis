@@ -1,3 +1,4 @@
+import { GREEK_LETTERS } from '@/data/constants';
 import type { 
     Point, 
     Edge, 
@@ -788,7 +789,7 @@ export function getAngleValue(angle: Pick<Angle, 'value'>): number | null {
 }
 
 export function getUnusedGreekLetter(angles: Angle[]): string {
-    const greekLetters = ['α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'ι', 'κ', 'λ', 'μ', 'ν', 'ξ', 'ο', 'π', 'ρ', 'σ', 'τ', 'υ', 'φ', 'χ', 'ψ', 'ω'];
+    const greekLetters = GREEK_LETTERS;
     const usedLabels = new Set(angles.map(a => a.label).filter(l => l));
     
     for (const letter of greekLetters) {

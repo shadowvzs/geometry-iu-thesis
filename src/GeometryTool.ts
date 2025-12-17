@@ -1538,7 +1538,9 @@ export class GeometryTool {
             dy: '0.3em',
             'data-angle-id': angleData.id
         });
-        text.textContent = getAngleDisplayText(angleData);
+        text.textContent = getAngleDisplayText(
+            this.mode === 'solver' ? {...angleData, value: undefined } : angleData
+        );
         
         // Add path and text to the group
         group.appendChild(path);

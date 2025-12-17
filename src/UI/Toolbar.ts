@@ -1,9 +1,11 @@
 import { NAME, VERSION } from "@/data/constants";
 import { createElement } from "../utils/domHelper";
 import { MessagingHub, Messages } from "../MessagingHub";
+import { ToolbarIcons } from "./ToolbarIcons";
 
 interface ButtonConfig {
-    icon: string;
+    icon?: string;      // SVG string (optional)
+    text?: string;      // Text label (optional, shown if no icon)
     title: string;
     class?: string;
     action: string;
@@ -17,106 +19,106 @@ interface ButtonInfo {
 
 const getDefaultButtonConfigs = (): Record<string, ButtonConfig> => ({
     pointer: {
-        icon: '👆',
+        icon: ToolbarIcons.pointer,
         title: 'Pointer Tool (Click to select/edit elements)',
         action: 'setTool',
         params: ['pointer']
     },
     drawPoint: {
-        icon: '➕',
+        icon: ToolbarIcons.drawPoint,
         title: 'Add Point (Click on canvas)',
         class: 'active',
         action: 'setTool',
         params: ['addPoint']
     },
     drawCircle: {
-        icon: '⭕',
+        icon: ToolbarIcons.drawCircle,
         title: 'Draw Circle (Select center point, then radius point)',
         action: 'setTool',
         params: ['drawCircle']
     },
     drawEdge: {
-        icon: '📏',
+        icon: ToolbarIcons.drawEdge,
         title: 'Draw Edge (Select 2 points)',
         action: 'setTool',
         params: ['drawEdge']
     },
     assignAngle: {
-        icon: '∠',
+        icon: ToolbarIcons.assignAngle,
         title: 'Assign Angle Value (Click on angle)',
         action: 'setTool',
         params: ['assignAngle']
     },
     angleBisector: {
-        icon: '✂️',
+        icon: ToolbarIcons.angleBisector,
         title: 'Create Angle Bisector (Click on angle)',
         action: 'setTool',
         params: ['angleBisector']
     },
     toggleNames: {
-        icon: '👁️',
+        icon: ToolbarIcons.toggleNames,
         title: 'Toggle Point Names (V)',
         action: 'togglePointNames',
         params: []
     },
     solveAngles: {
-        icon: '🔍',
+        icon: ToolbarIcons.solveAngles,
         title: 'Solve Unknown Angles (Use geometric theorems)',
         action: 'solveAngles',
         params: []
     },
     extractEquations: {
-        icon: '📄',
+        icon: ToolbarIcons.extractEquations,
         title: 'Extract Equations',
         action: 'extractEquations',
         params: []
     },
     hideElement: {
-        icon: '⛏',
+        icon: ToolbarIcons.hideElement,
         title: 'Hide element (Click on element)',
         action: 'hideElement',
         params: []
     },
     save: {
-        icon: '💾',
+        icon: ToolbarIcons.save,
         title: 'Save to Clipboard (JSON)',
         action: 'saveToClipboard',
         params: []
     },
     load: {
-        icon: '📂',
+        icon: ToolbarIcons.load,
         title: 'Load from JSON',
         action: 'loadFromJSON',
         params: []
     },
     undo: {
-        icon: '↶',
+        icon: ToolbarIcons.undo,
         title: 'Undo (Ctrl+Z)',
         action: 'undo',
         params: []
     },
     redo: {
-        icon: '↷',
+        icon: ToolbarIcons.redo,
         title: 'Redo (Ctrl+Y)',
         action: 'redo',
         params: []
     },
     clear: {
-        icon: '🗑️',
+        icon: ToolbarIcons.clear,
         title: 'Clear all',
         class: 'danger',
         action: 'clear',
         params: []
     },
     toSolvedMode: {
-        icon: '⚓',
+        text: 'Solve',
         title: 'Solve in new tab',
         class: 'to-solver-mode',
         action: 'solveInNewTab',
         params: []
     },
     toggleResultPanel: {
-        icon: 'Solve',
+        text: 'Solve',
         title: 'Toggle Result Panel',
         class: 'solve-btn',
         action: 'toggleResultPanel',
@@ -173,7 +175,15 @@ export class Toolbar {
             return;
         }
         const classes = config.class ? `tool-btn ${config.class}` : 'tool-btn';
-        const button = createElement('button', { id: `${id}Btn`, class: classes, title: config.title }, [config.icon]) as HTMLButtonElement;
+        const button = createElement('button', { id: `${id}Btn`, class: classes, title: config.title }) as HTMLButtonElement;
+        
+        // Set content: prefer icon (SVG), fallback to text
+        if (config.icon) {
+            button.innerHTML = config.icon;
+        } else if (config.text) {
+            button.textContent = config.text;
+        }
+        
         button.addEventListener('click', onclick);
 
         this.buttons.appendChild(button);

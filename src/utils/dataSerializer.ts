@@ -404,11 +404,15 @@ export const serializeStateForUrl = ({
         return;
     }
     const data = serializeGeometryData({ points, edges, circles, angles, lines, definitions });
+    console.log('data', data);
     data.angles
         .filter(angle => angle.l)
         .forEach(angle => {
             if (angle.l) {
                 angle.l = encodeURIComponent(angle.l);
+                if (angle.t && typeof angle.v === 'number') {
+                    angle.v = encodeNumber(angle.v);
+                }
             }
         });
     const encodedData = window.btoa(JSON.stringify(data));
@@ -417,6 +421,7 @@ export const serializeStateForUrl = ({
 
 export const deserializeStateFromUrl = (encodedText: string | null): SerializedGeometryData | null => {
     if (!encodedText) return null;
+    console.log('encodedText', encodedText);
     try {
         const json = window.atob(encodedText);
         const data = JSON.parse(json) as SerializedGeometryData;
@@ -425,6 +430,9 @@ export const deserializeStateFromUrl = (encodedText: string | null): SerializedG
             .forEach(angle => {
                 if (angle.l) {
                     angle.l = decodeURIComponent(angle.l);
+                    if (angle.t && typeof angle.v === 'string') {
+                        angle.v = decodeNumber(angle.v);
+                    }
                 }
             });
         return data;
@@ -434,3 +442,48 @@ export const deserializeStateFromUrl = (encodedText: string | null): SerializedG
     }
 };
 
+const BASE61_CHARS = 'Lk8Wv1PtR0oMjXeGhnSwKZQy3uCU9DFdmA6bfcY7iVg5rp2lNETq4xOsIBJaHz';
+const DECIMAL_SEP = 'z';
+
+export function encodeNumber(value: number): string {
+    const integerPart = Math.floor(value);
+    const decimalPart = Math.round((value - integerPart) * 100);
+    
+    // Convert integer to base61
+    const encodeInt = (num: number): string => {
+        if (num === 0) return BASE61_CHARS[0];
+        let result = '';
+        while (num > 0) {
+            result = BASE61_CHARS[num % 61] + result;
+            num = Math.floor(num / 61);
+        }
+        return result;
+    };
+    
+    // If it's a float, include decimal part
+    if (decimalPart > 0) {
+        return encodeInt(integerPart) + DECIMAL_SEP + encodeInt(decimalPart);
+    }
+    
+    // Integer only
+    return encodeInt(integerPart);
+}
+
+export function decodeNumber(str: string): number {
+    const decodeInt = (s: string): number => {
+        let result = 0;
+        for (const char of s) {
+            result = result * 61 + BASE61_CHARS.indexOf(char);
+        }
+        return result;
+    };
+    
+    // Check if it's a float (has decimal separator)
+    if (str.includes(DECIMAL_SEP)) {
+        const [intPart, decPart] = str.split(DECIMAL_SEP);
+        return decodeInt(intPart) + decodeInt(decPart) / 100;
+    }
+    
+    // Integer only
+    return decodeInt(str);
+}
