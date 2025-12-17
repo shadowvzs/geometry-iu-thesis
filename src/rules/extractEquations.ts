@@ -884,9 +884,10 @@ export const cleanEquationsForWolfram = (equations: string[]): string[] => {
 /**
  * Generate a Wolfram Alpha URL from equations
  */
-export const generateWolframUrl = (equations: string[]): string => {
+export const generateWolframUrl = (equations: string[], targets: string[]): string => {
     const cleanedEquations = cleanEquationsForWolfram(equations);
-    const wolframQuery = 'solve {' + cleanedEquations.join(', ')+'}';
+    const text = targets.length > 0 ? 'solve for ' + targets.join(', ')+':' : 'solve';
+    const wolframQuery = `${text} {` + cleanedEquations.join(', ')+'}';
     const encodedQuery = encodeURIComponent(wolframQuery);
     return `https://www.wolframalpha.com/input?i=${encodedQuery}`;
 };
@@ -908,7 +909,8 @@ export interface EquationExtractionResult {
 export const extractEquationsWithWolfram = (data: SolveDataWithMaps): EquationExtractionResult => {
     const equations = extractEquations(data);
     const { equations: simplified, mapping, reverseMapping } = simplifyEquations(equations, data);
-    const wolframUrl = generateWolframUrl(simplified);
+    const targets: string[] = data.angles.filter(angle => angle.target).map(angle => mapping.get(angle.name)).filter(name => name !== undefined);
+    const wolframUrl = generateWolframUrl(simplified, targets);
     
     return {
         equations,

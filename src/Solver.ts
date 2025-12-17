@@ -227,9 +227,6 @@ export class Solver extends GeometryTool {
 
     loadData = (rawData: SerializedGeometryData) => {
         // hide or non given or non target angles
-        rawData.angles
-            .filter(angle => Boolean(angle.t || angle.v === null || angle.v === undefined))
-            .forEach(angle => { angle.h = 1; });
         super.loadData(rawData);
     }
 
