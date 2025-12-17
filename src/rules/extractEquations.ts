@@ -298,6 +298,70 @@ const extractIsoscelesEquations = (
     { triangles, circles, angles }: SolveDataWithMaps,
     equations: string[]
 ): void => {
+    // Track which isosceles relationships we've already added
+    const addedEquations = new Set<string>();
+    
+    const addIsoscelesEquation = (angle1: Angle, angle2: Angle) => {
+        const key = [angle1.name, angle2.name].sort().join('=');
+        if (!addedEquations.has(key)) {
+            addedEquations.add(key);
+            equations.push(`${angle1.name}=${angle2.name}`);
+        }
+    };
+
+    // ============================================
+    // First: Check circles directly for isosceles triangles
+    // This catches cases where the triangle isn't explicitly defined
+    // ============================================
+    circles.forEach(circle => {
+        const center = circle.centerPoint;
+        const pointsOnCircle = circle.pointsOnLine;
+        
+        if (pointsOnCircle.length < 2) return;
+        
+        // For each pair of points on the circle, we have an isosceles triangle
+        for (let i = 0; i < pointsOnCircle.length; i++) {
+            for (let j = i + 1; j < pointsOnCircle.length; j++) {
+                const point1 = pointsOnCircle[i];
+                const point2 = pointsOnCircle[j];
+                
+                // Find base angles: angle at point1 with sidepoints including center and point2
+                // and angle at point2 with sidepoints including center and point1
+                const baseAngle1 = angles.find(a => 
+                    a.pointId === point1 &&
+                    a.sidepoints.includes(center) &&
+                    a.sidepoints.includes(point2)
+                );
+                
+                const baseAngle2 = angles.find(a => 
+                    a.pointId === point2 &&
+                    a.sidepoints.includes(center) &&
+                    a.sidepoints.includes(point1)
+                );
+                
+                if (baseAngle1 && baseAngle2) {
+                    // Base angles are equal in isosceles triangle
+                    addIsoscelesEquation(baseAngle1, baseAngle2);
+                }
+                
+                // Also find vertex angle at center
+                const vertexAngle = angles.find(a =>
+                    a.pointId === center &&
+                    a.sidepoints.includes(point1) &&
+                    a.sidepoints.includes(point2)
+                );
+                
+                if (vertexAngle && baseAngle1 && baseAngle2) {
+                    // Vertex angle: ∠Vertex=180-∠Base1-∠Base2
+                    equations.push(`${vertexAngle.name}=180-${baseAngle1.name}-${baseAngle2.name}`);
+                }
+            }
+        }
+    });
+
+    // ============================================
+    // Second: Check defined triangles (for labels and other cases)
+    // ============================================
     triangles.forEach(triangleData => {
         const triangle: Triangle = triangleData instanceof Set 
             ? triangleData 
@@ -342,13 +406,13 @@ const extractIsoscelesEquations = (
         
         if (isEquilateralByLabel || isEquilateralByCircles) {
             // All angles equal: ∠A=∠B, ∠B=∠C, and each = 60
-            equations.push(`${triangleAngles[0].name}=${triangleAngles[1].name}`);
-            equations.push(`${triangleAngles[1].name}=${triangleAngles[2].name}`);
+            addIsoscelesEquation(triangleAngles[0], triangleAngles[1]);
+            addIsoscelesEquation(triangleAngles[1], triangleAngles[2]);
             equations.push(`${triangleAngles[0].name}=60`);
             return;
         }
         
-        // Check for isosceles by circle
+        // Check for isosceles by circle (already handled above, but keep for explicit triangles)
         for (const circle of circles) {
             const vertexAngle = searchVertexAngleInIsoscelesTriangle(triangleAngles, circle);
             if (!vertexAngle) continue;
@@ -357,10 +421,7 @@ const extractIsoscelesEquations = (
             if (baseAngles.length !== 2) continue;
             
             // Base angles are equal: ∠Base1=∠Base2
-            equations.push(`${baseAngles[0].name}=${baseAngles[1].name}`);
-            
-            // Vertex angle: ∠Vertex=180-∠Base1-∠Base2 (or 180-2*∠Base)
-            equations.push(`${vertexAngle.name}=180-${baseAngles[0].name}-${baseAngles[1].name}`);
+            addIsoscelesEquation(baseAngles[0], baseAngles[1]);
             
             break;
         }
@@ -377,7 +438,7 @@ const extractIsoscelesEquations = (
         Object.values(labelCounts).forEach(sameLabel => {
             if (sameLabel.length === 2) {
                 // Two angles with same label = isosceles base angles
-                equations.push(`${sameLabel[0].name}=${sameLabel[1].name}`);
+                addIsoscelesEquation(sameLabel[0], sameLabel[1]);
             }
         });
     });

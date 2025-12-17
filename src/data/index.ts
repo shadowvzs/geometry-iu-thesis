@@ -17,6 +17,7 @@ import testdata16 from './testdata16.json';
 import testdata17 from './testdata17.json';
 import testdata18 from './testdata18.json';
 import testdata19 from './testdata19.json';
+import testdata20 from './testdata20.json';
 
 const testdata = [
     testdata1,
@@ -38,6 +39,7 @@ const testdata = [
     testdata17,
     testdata18,
     testdata19,
+    testdata20,
 ];
 
 export default testdata;

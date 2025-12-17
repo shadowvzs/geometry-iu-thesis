@@ -1,0 +1,33 @@
+{
+  "name": "Eigenmann no 145, 3 circle with multiple isosceles triangles and 1 supplimentary angle, 1 composed angle.",
+  "points": [
+    { "id": "A", "x": 349, "y": 322 },
+    { "id": "B", "x": 613, "y": 326 },
+    { "id": "C", "x": 264, "y": 70 },
+    { "id": "D", "x": 178, "y": 320 }
+  ],
+  "edges": [
+    { "p": ["A", "B"] },
+    { "p": ["C", "A"] },
+    { "p": ["B", "C"] },
+    { "p": ["A", "D"] },
+    { "p": ["C", "D"] }
+  ],
+  "circles": [
+    { "id": "A", "r": 264, "p": ["B", "C"] },
+    { "id": "C", "r": 266, "p": ["A", "D"] },
+    { "id": "B", "r": 433, "p": ["C", "D"] }
+  ],
+  "angles": [
+    { "id": "A", "p": ["B", "C"] },
+    { "id": "C", "p": ["B", "D"] },
+    { "id": "D", "p": ["A", "C"], "t": 1 },
+    { "id": "A", "p": ["C", "D"], "l": "α" },
+    { "id": "C", "p": ["A", "D"] },
+    { "id": "B", "p": ["A", "C"], "v": 35 },
+    { "id": "C", "p": ["A", "B"] }
+  ],
+  "lines": [
+    ["D", "A", "B"]
+  ]
+}
