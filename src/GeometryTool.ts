@@ -875,6 +875,10 @@ export class GeometryTool {
         const circlePoint = this.pointsMap.get(this.selectedPoints[1]);
         
         if (!centerPoint || !circlePoint) return;
+        if (this.circles.some(circle => circle.centerPoint === centerPoint.id && circle.pointsOnLine.includes(circlePoint.id))) {
+            alert('Circle already exists');
+            return;
+        }
         
         // Calculate radius as distance from center to circle point using utility function
         const radius = Math.round(distance(centerPoint.x, centerPoint.y, circlePoint.x, circlePoint.y));
