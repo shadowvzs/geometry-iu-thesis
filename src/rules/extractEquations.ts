@@ -6,6 +6,7 @@ import {
     findSameAnglesGroups,
     searchVertexAngleInIsoscelesTriangle,
     getAngleValue,
+    isSameRay,
 } from '../utils/mathHelper';
 
 /**
@@ -295,7 +296,7 @@ const extractSameLabelEquations = (
  * Equilateral triangles: all angles = 60°
  */
 const extractIsoscelesEquations = (
-    { triangles, circles, angles }: SolveDataWithMaps,
+    { triangles, circles, angles, lines }: SolveDataWithMaps,
     equations: string[]
 ): void => {
     // Track which isosceles relationships we've already added
@@ -307,6 +308,33 @@ const extractIsoscelesEquations = (
             addedEquations.add(key);
             equations.push(`${angle1.name}=${angle2.name}`);
         }
+    };
+
+    // Helper: Find angle at vertex with sidepoints (considering collinear equivalents via isSameRay)
+    const findBaseAngle = (vertex: string, sidepoint1: string, sidepoint2: string): Angle | undefined => {
+        // First try exact match
+        let angle = angles.find(a => 
+            a.pointId === vertex &&
+            a.sidepoints.includes(sidepoint1) &&
+            a.sidepoints.includes(sidepoint2)
+        );
+        if (angle) return angle;
+        
+        // Try to find an angle where one sidepoint is on the same ray as the target sidepoint
+        angle = angles.find(a => {
+            if (a.pointId !== vertex) return false;
+            const [sp1, sp2] = a.sidepoints;
+            
+            // Check if sp1 matches sidepoint1 (or is on same ray) AND sp2 matches sidepoint2 (or is on same ray)
+            const match1 = (sp1 === sidepoint1 || isSameRay(sp1, sidepoint1, vertex, lines)) &&
+                          (sp2 === sidepoint2 || isSameRay(sp2, sidepoint2, vertex, lines));
+            const match2 = (sp1 === sidepoint2 || isSameRay(sp1, sidepoint2, vertex, lines)) &&
+                          (sp2 === sidepoint1 || isSameRay(sp2, sidepoint1, vertex, lines));
+            
+            return match1 || match2;
+        });
+        
+        return angle;
     };
 
     // ============================================
@@ -325,31 +353,17 @@ const extractIsoscelesEquations = (
                 const point1 = pointsOnCircle[i];
                 const point2 = pointsOnCircle[j];
                 
-                // Find base angles: angle at point1 with sidepoints including center and point2
-                // and angle at point2 with sidepoints including center and point1
-                const baseAngle1 = angles.find(a => 
-                    a.pointId === point1 &&
-                    a.sidepoints.includes(center) &&
-                    a.sidepoints.includes(point2)
-                );
-                
-                const baseAngle2 = angles.find(a => 
-                    a.pointId === point2 &&
-                    a.sidepoints.includes(center) &&
-                    a.sidepoints.includes(point1)
-                );
+                // Find base angles using the helper that checks collinear equivalents
+                const baseAngle1 = findBaseAngle(point1, center, point2);
+                const baseAngle2 = findBaseAngle(point2, center, point1);
                 
                 if (baseAngle1 && baseAngle2) {
                     // Base angles are equal in isosceles triangle
                     addIsoscelesEquation(baseAngle1, baseAngle2);
                 }
                 
-                // Also find vertex angle at center
-                const vertexAngle = angles.find(a =>
-                    a.pointId === center &&
-                    a.sidepoints.includes(point1) &&
-                    a.sidepoints.includes(point2)
-                );
+                // Also find vertex angle at center (using the helper)
+                const vertexAngle = findBaseAngle(center, point1, point2);
                 
                 if (vertexAngle && baseAngle1 && baseAngle2) {
                     // Vertex angle: ∠Vertex=180-∠Base1-∠Base2

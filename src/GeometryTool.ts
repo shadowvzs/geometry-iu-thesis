@@ -411,7 +411,8 @@ export class GeometryTool {
                 this.fixPointPositionOnEdges(point, intersectedEdges);
             }
             // here we process the intersected edges, so we remove from the edge list
-            edges = edges.filter(e => result.intersectedEdges.includes(e.id));
+            // TODO: maybe we not need to filter
+            // edges = edges.filter(e => result.intersectedEdges.includes(e.id));
             intersectedEdges.forEach(edge => {
                 // (line, pairPointIds, pointId)
                 const existingLine = lines.find(l => isEdgeOnThisLine(edge, l));
@@ -437,23 +438,30 @@ export class GeometryTool {
                 this.createEdge(point.id, edge.points[1]);
             });
         }
+
         if (lines.length > 0) {
             lines.forEach(line => {
-                const points = sortLinePoints([...line.points, point.id], this.pointsMap);
+                const uniquePoints = [...new Set([...line.points, point.id])];
+                const points = sortLinePoints(uniquePoints, this.pointsMap);
                 line.points = points;
-                edges = edges.filter(e => !isEdgeOnThisLine(e, line));
+                // TODO: maybe we not need to filter
+                // edges = edges.filter(e => !isEdgeOnThisLine(e, line));
             });
         }
+
         // edges being collinear with new point but the point is not in between edge points
         if (edges.length > 0) {
+
             edges.forEach(edge => {
                 const existingLine = this.lines.find(l => isEdgeOnThisLine(edge, l));
                 if (existingLine) {
                     lines = lines.filter(l => l.id !== existingLine.id);
-                    const points = sortLinePoints([...existingLine.points, point.id], this.pointsMap);
+                    const uniquePoints = [...new Set([...existingLine.points, point.id])];
+                    const points = sortLinePoints(uniquePoints, this.pointsMap);
                     existingLine.points = points;
                 } else {
-                    const points = sortLinePoints([...edge.points, point.id], this.pointsMap);
+                    const uniquePoints = [...new Set([...edge.points, point.id])];
+                    const points = sortLinePoints(uniquePoints, this.pointsMap);
                     this.addLine(points);
                 }
             });

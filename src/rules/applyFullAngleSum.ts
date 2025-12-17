@@ -261,7 +261,7 @@ function tryToSolve(
 ): boolean {
     const { angles, vertex, sumTo } = group;
     let changesMade = false;
-    
+
     const unknownAngles = getUnsolvedAngles(angles);
     const knownSum = sumOfSolvedAnglesValue(angles);
     const remaining = sumTo - knownSum;
@@ -291,7 +291,7 @@ function tryToSolve(
     const firstLabel = unknownAngles[0]?.label;
     if (firstLabel) {
         const sameLabelAngles = unknownAngles.filter(a => a.label === firstLabel);
-        
+
         // All unknowns have the same label
         if (sameLabelAngles.length === unknownAngles.length) {
             const value = remaining / sameLabelAngles.length;
@@ -319,14 +319,12 @@ function tryToSolve(
         // Some unknowns have same label, others don't but might be calculable
         else if (sameLabelAngles.length > 0) {
             const otherUnknowns = unknownAngles.filter(a => a.label !== firstLabel);
-            
             // If other unknowns all have their calculatedValue and it's reliable
-            const otherKnownCalc = otherUnknowns.filter(a => a.calculatedValue !== undefined);
+            const otherKnownCalc = otherUnknowns.filter(a => getAngleValue(a) !== null);
             if (otherKnownCalc.length === otherUnknowns.length && otherUnknowns.length > 0) {
                 const otherSum = otherUnknowns.reduce((sum, a) => sum + (a.calculatedValue ?? 0), 0);
                 const sameLabelSum = remaining - otherSum;
                 const value = sameLabelSum / sameLabelAngles.length;
-                
                 if (value > 0 && value < 180) {
                     // Validate against constraints
                     const constraintValid = sameLabelAngles.every(a => {
