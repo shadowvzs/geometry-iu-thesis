@@ -592,12 +592,22 @@ export const getTriangles2 = (
     return triangles;
 };
 
-export const searchVertexAngleInIsoscelesTriangle = (angles: Angle[], circle: Circle): Angle | undefined => {
-    // 
+export const searchVertexAngleInIsoscelesTriangle = (angles: Angle[], circle: Circle, lines: Line[], triangleData: [string, string, string]): Angle | undefined => {
+    const findVertexPoint = triangleData.find(p => {
+        const otherPoints = triangleData.filter(tp => tp !== p);
+        return p === circle.centerPoint && otherPoints.every(op => circle.pointsOnLine?.includes(op));
+    });
+    if (!findVertexPoint) return undefined;
+
     const isVertexPoint = angles.find(a => (
         a.pointId === circle.centerPoint &&
+        a.pointId === findVertexPoint &&
         a.sidepoints &&
-        a.sidepoints.every(np => circle.pointsOnLine?.includes(np))
+        a.sidepoints.every(np => {
+            if (circle.pointsOnLine?.includes(np)) return true;
+            const points = getLinePointsAfterAnEdge(lines, circle.centerPoint, np);
+            return points && points.includes(np);
+        })
     ));
     return isVertexPoint;
 };
@@ -682,14 +692,36 @@ export const isThisAngle = (angle: Angle, vertexId: string, point1: string, poin
         angle.sidepoints.includes(point2);
 };
 
-export const getTriangleAngles = (triangle: Triangle, angles: Angle[]): Angle[] => {
+// find line after an edge, important the first point and second because we need to know the direction of the line
+export const getLinePointsAfterAnEdge = (lines: Line[], firstPointId: string, secondPointId: string): string[] | null => {
+    const line = lines.find(l => l.points.includes(firstPointId) && l.points.includes(secondPointId));
+    if (!line) return null;
+    const linePoints = [...line.points];
+    const firstPointIndex = linePoints.indexOf(firstPointId);
+    const secondPointIndex = linePoints.indexOf(secondPointId);
+    // remove the points which are on the opposite direction of the pointId
+    if (firstPointIndex < secondPointIndex) {
+        return linePoints.slice(secondPointIndex-1);
+    } else {
+        return linePoints.slice(0, firstPointIndex);
+    }
+};
+
+export const getTriangleAngles = (triangle: Triangle, angles: Angle[], lines: Line[]): Angle[] => {
     const triangleAngles: Angle[] = [];
     const pointsInTriangle = Array.from(triangle);
     pointsInTriangle.forEach(pointId => {
         const otherPoints = pointsInTriangle.filter(p => p !== pointId);
-        const angle = angles.find(a => a.pointId === pointId && 
-            a.sidepoints && a.sidepoints.length === 2 &&
-            a.sidepoints.includes(otherPoints[0]) && a.sidepoints.includes(otherPoints[1]));
+
+        // maybe the angles have different points but they are on the same line
+        let line1 = getLinePointsAfterAnEdge(lines, pointId, otherPoints[0]) || [otherPoints[0]];
+        let line2 = getLinePointsAfterAnEdge(lines, pointId, otherPoints[1]) || [otherPoints[1]];
+        const angle = angles
+            .filter(a => a.pointId === pointId && a.sidepoints && a.sidepoints.length === 2)
+            .find(a => (   
+                (line1.includes(a.sidepoints[0]) && line2.includes(a.sidepoints[1])) ||
+                (line1.includes(a.sidepoints[1]) && line2.includes(a.sidepoints[0]))
+            ));
         if (angle) triangleAngles.push(angle);
     });
     return triangleAngles;

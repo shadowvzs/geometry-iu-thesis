@@ -104,7 +104,7 @@ const findCompositeAngles = (angles: Angle[], points: Point[]): CompositeGroup[]
 };
 
 export const applyComposedAngles = (data: SolveDataWithMaps, log: LogFn): boolean => {
-    const { angles, points, triangles } = data;
+    const { angles, points, triangles, lines } = data;
     let changesMade = false;
     const composites = findCompositeAngles(angles, points);
     
@@ -126,7 +126,7 @@ export const applyComposedAngles = (data: SolveDataWithMaps, log: LogFn): boolea
                 
                 // Validate against all constraints
                 const validation = validateAngleValue(unknownChildren[0], unknownAngleValue, {
-                    angles, points, triangles
+                    angles, points, triangles, lines
                 });
                 if (!validation.valid) {
                     // Skip this value - it would violate constraints
@@ -144,7 +144,7 @@ export const applyComposedAngles = (data: SolveDataWithMaps, log: LogFn): boolea
                 // Validate all same-label children against constraints
                 const allValid = sameLabelChildren.every(c => {
                     const validation = validateAngleValue(c, unknownAngleValue, {
-                        angles, points, triangles
+                        angles, points, triangles, lines
                     });
                     return validation.valid;
                 });
@@ -167,7 +167,7 @@ export const applyComposedAngles = (data: SolveDataWithMaps, log: LogFn): boolea
             
             // Validate against all constraints
             const validation = validateAngleValue(parent, sum, {
-                angles, points, triangles
+                angles, points, triangles, lines
             });
             if (!validation.valid) {
                 // Skip this value - it would violate constraints

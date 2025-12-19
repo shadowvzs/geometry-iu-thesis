@@ -58,7 +58,7 @@ export const extractEquations = (data: SolveDataWithMaps): string[] => {
  * Triangle: sum of angles = 180°
  */
 const extractTriangleEquations = (
-    { triangles, angles }: SolveDataWithMaps,
+    { triangles, angles, lines }: SolveDataWithMaps,
     equations: string[]
 ): void => {
     triangles.forEach(triangleData => {
@@ -66,7 +66,7 @@ const extractTriangleEquations = (
             ? triangleData 
             : new Set(triangleData);
         
-        const triangleAngles = getTriangleAngles(triangle, angles);
+        const triangleAngles = getTriangleAngles(triangle, angles, lines);
         if (triangleAngles.length !== 3) return;
         
         // ∠A+∠B+∠C=180
@@ -381,7 +381,7 @@ const extractIsoscelesEquations = (
             ? triangleData 
             : new Set(triangleData);
         
-        const triangleAngles = getTriangleAngles(triangle, angles);
+        const triangleAngles = getTriangleAngles(triangle, angles, lines);
         if (triangleAngles.length !== 3) return;
         
         // Check for equilateral triangle (all same label)
@@ -428,7 +428,7 @@ const extractIsoscelesEquations = (
         
         // Check for isosceles by circle (already handled above, but keep for explicit triangles)
         for (const circle of circles) {
-            const vertexAngle = searchVertexAngleInIsoscelesTriangle(triangleAngles, circle);
+            const vertexAngle = searchVertexAngleInIsoscelesTriangle(triangleAngles, circle, lines, triangleArray);
             if (!vertexAngle) continue;
             
             const baseAngles = triangleAngles.filter(a => a.pointId !== vertexAngle.pointId);

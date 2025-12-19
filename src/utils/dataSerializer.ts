@@ -404,7 +404,6 @@ export const serializeStateForUrl = ({
         return;
     }
     const data = serializeGeometryData({ points, edges, circles, angles, lines, definitions });
-    console.log('data', data);
     data.angles
         .filter(angle => angle.l)
         .forEach(angle => {
@@ -421,7 +420,6 @@ export const serializeStateForUrl = ({
 
 export const deserializeStateFromUrl = (encodedText: string | null): SerializedGeometryData | null => {
     if (!encodedText) return null;
-    console.log('encodedText', encodedText);
     try {
         const json = window.atob(encodedText);
         const data = JSON.parse(json) as SerializedGeometryData;

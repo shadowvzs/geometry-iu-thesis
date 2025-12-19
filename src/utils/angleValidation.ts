@@ -1,4 +1,4 @@
-import type { Angle, Point, Triangle } from '../types';
+import type { Angle, Line, Point, Triangle } from '../types';
 import { getAngleValue, getTriangleAngles } from './mathHelper';
 
 export interface ValidationResult {
@@ -155,6 +155,7 @@ export function wouldViolateTriangleConstraint(
     proposedValue: number,
     triangles: (Triangle | string[])[],
     angles: Angle[],
+    lines: Line[],
     tolerance: number = 0.5
 ): ValidationResult {
     for (const triangleData of triangles) {
@@ -162,7 +163,7 @@ export function wouldViolateTriangleConstraint(
             ? triangleData 
             : new Set(triangleData);
         
-        const triangleAngles = getTriangleAngles(triangle, angles);
+        const triangleAngles = getTriangleAngles(triangle, angles, lines);
         if (triangleAngles.length !== 3) continue;
         
         // Check if this angle is in the triangle
@@ -312,6 +313,7 @@ export function validateAngleValue(
         angles: Angle[];
         points: Point[];
         triangles: (Triangle | string[])[];
+        lines: Line[];
         supplementaryGroups?: { angles: Angle[]; sumTo: number }[];
     }
 ): ValidationResult {
@@ -323,7 +325,7 @@ export function validateAngleValue(
     
     // Check triangle constraint
     const triangleResult = wouldViolateTriangleConstraint(
-        angle, proposedValue, data.triangles, data.angles
+        angle, proposedValue, data.triangles, data.angles, data.lines
     );
     if (!triangleResult.valid) return triangleResult;
     

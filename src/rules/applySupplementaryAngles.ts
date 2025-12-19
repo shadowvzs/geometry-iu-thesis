@@ -178,7 +178,7 @@ export const applySupplementaryAngles = (data: SolveDataWithMaps, log: LogFn): b
             
             // Validate against all constraints
             const validation = validateAngleValue(unknownAngles[0], value, {
-                angles, points, triangles
+                angles, points, triangles, lines
             });
             if (!validation.valid) return;
             
@@ -203,7 +203,7 @@ export const applySupplementaryAngles = (data: SolveDataWithMaps, log: LogFn): b
             // Validate all angles against constraints
             const allValid = sameLabelAngles.every(angle => {
                 const validation = validateAngleValue(angle, angleValue, {
-                    angles, points, triangles
+                    angles, points, triangles, lines
                 });
                 return validation.valid;
             });

@@ -17,16 +17,15 @@ type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
 const TriangleAngleSum = 180;
 
 export const applyTriangleAngleSum = (data: SolveDataWithMaps, log: LogFn): boolean => {
-    const { triangles, circles, angles, points } = data;
+    const { triangles, circles, angles, points, lines } = data;
     let changesMade = false;
-
     triangles.forEach(triangleData => {
         const triangle: Triangle = triangleData instanceof Set 
             ? triangleData 
             : new Set(triangleData);
         const triangleArray = Array.from(triangle);
-        
-        const triangleAngles = getTriangleAngles(triangle, angles);
+        const triangleAngles = getTriangleAngles(triangle, angles, lines);
+
         if (triangleAngles.length !== 3) {
             console.warn(`Triangle does not have exactly 3 angles (${triangleArray.toString()})`, triangleAngles);
             return;
@@ -40,7 +39,7 @@ export const applyTriangleAngleSum = (data: SolveDataWithMaps, log: LogFn): bool
             
             // Validate against all constraints
             const validation = validateAngleValue(remainingAngles[0], proposedValue, {
-                angles, points, triangles
+                angles, points, triangles, lines
             });
             if (!validation.valid) {
                 return; // Skip - would violate constraints
@@ -62,7 +61,7 @@ export const applyTriangleAngleSum = (data: SolveDataWithMaps, log: LogFn): bool
             // Validate all angles
             const allValid = remainingAngles.every(a => {
                 const validation = validateAngleValue(a, baseAngleValue, {
-                    angles, points, triangles
+                    angles, points, triangles, lines
                 });
                 return validation.valid;
             });
@@ -85,7 +84,7 @@ export const applyTriangleAngleSum = (data: SolveDataWithMaps, log: LogFn): bool
             // Validate all angles
             const allValid = remainingAngles.every(a => {
                 const validation = validateAngleValue(a, calculatedValue, {
-                    angles, points, triangles
+                    angles, points, triangles, lines
                 });
                 return validation.valid;
             });
@@ -102,11 +101,10 @@ export const applyTriangleAngleSum = (data: SolveDataWithMaps, log: LogFn): bool
             changesMade = true;
             return;
         }
-
         for (const circle of circles) {
-            const vertexAngle = searchVertexAngleInIsoscelesTriangle(triangleAngles, circle);
+            const vertexAngle = searchVertexAngleInIsoscelesTriangle(triangleAngles, circle, lines, triangleArray);
             if (!vertexAngle) continue;
-            
+
             const vertexValue = getAngleValue(vertexAngle);
             if (vertexValue) {
                 const baseAngleValue = (TriangleAngleSum - vertexValue) / 2;
@@ -115,7 +113,7 @@ export const applyTriangleAngleSum = (data: SolveDataWithMaps, log: LogFn): bool
                 // Validate all angles
                 const allValid = remainingAngles.every(a => {
                     const validation = validateAngleValue(a, baseAngleValue, {
-                        angles, points, triangles
+                        angles, points, triangles, lines
                     });
                     return validation.valid;
                 });
@@ -152,7 +150,7 @@ export const applyTriangleAngleSum = (data: SolveDataWithMaps, log: LogFn): bool
                     }
                     
                     const validation = validateAngleValue(a, angleValue, {
-                        angles, points, triangles
+                        angles, points, triangles, lines
                     });
                     if (!validation.valid) {
                         allValid = false;

@@ -1,5 +1,5 @@
 import type { SolveDataWithMaps } from '@/utils/solve';
-import type { Angle, Point } from '../types';
+import type { Angle, Line, Point } from '../types';
 import {
     pointToAngle,
     getUnsolvedAngles,
@@ -32,7 +32,7 @@ export const applyFullAngleSum = (
     data: SolveDataWithMaps,
     log: LogFn
 ): boolean => {
-    const { angleMapsByPointId, points, angles, triangles } = data;
+    const { angleMapsByPointId, points, angles, triangles, lines } = data;
     let changesMade = false;
 
     // Process all vertices that have at least 3 angles
@@ -109,7 +109,7 @@ export const applyFullAngleSum = (
                 angles: partition,
                 vertex,
                 sumTo: 360
-            }, log, { angles, points, triangles }) || changesMade;
+            }, log, { angles, points, triangles, lines }) || changesMade;
         }
 
         // ============================================
@@ -144,7 +144,7 @@ export const applyFullAngleSum = (
                                 angles: subset,
                                 vertex,
                                 sumTo: subsetSumTo
-                            }, log, { angles, points, triangles }) || changesMade;
+                            }, log, { angles, points, triangles, lines }) || changesMade;
                         }
                     }
                 }
@@ -167,7 +167,7 @@ export const applyFullAngleSum = (
                 
                 if (v1 !== null && v2 === null) {
                     // Validate before setting
-                    const validation = validateAngleValue(a2, v1, { angles, points, triangles });
+                    const validation = validateAngleValue(a2, v1, { angles, points, triangles, lines });
                     if (!validation.valid) return;
                     
                     a2.value = v1;
@@ -175,7 +175,7 @@ export const applyFullAngleSum = (
                     changesMade = true;
                 } else if (v2 !== null && v1 === null) {
                     // Validate before setting
-                    const validation = validateAngleValue(a1, v2, { angles, points, triangles });
+                    const validation = validateAngleValue(a1, v2, { angles, points, triangles, lines });
                     if (!validation.valid) return;
                     
                     a1.value = v2;
@@ -207,8 +207,8 @@ export const applyFullAngleSum = (
                         const value = remainingSum / 2;
                         if (value > 0 && value < 180) {
                             // Validate both
-                            const v3Valid = validateAngleValue(a3, value, { angles, points, triangles });
-                            const v4Valid = validateAngleValue(a4, value, { angles, points, triangles });
+                            const v3Valid = validateAngleValue(a3, value, { angles, points, triangles, lines });
+                            const v4Valid = validateAngleValue(a4, value, { angles, points, triangles, lines });
                             if (!v3Valid.valid || !v4Valid.valid) continue;
                             
                             a3.value = value;
@@ -233,7 +233,7 @@ export const applyFullAngleSum = (
                 if (value > 0 && value < 180) {
                     // Validate all
                     const allValid = sortedAngles.every(a => {
-                        const validation = validateAngleValue(a, value, { angles, points, triangles });
+                        const validation = validateAngleValue(a, value, { angles, points, triangles, lines });
                         return validation.valid;
                     });
                     if (!allValid) return;
@@ -257,7 +257,7 @@ export const applyFullAngleSum = (
 function tryToSolve(
     group: FullCircleGroup, 
     log: LogFn,
-    validationData: { angles: Angle[]; points: Point[]; triangles: any[] }
+    validationData: { angles: Angle[]; points: Point[]; triangles: any[]; lines: Line[] }
 ): boolean {
     const { angles, vertex, sumTo } = group;
     let changesMade = false;

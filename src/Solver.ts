@@ -271,7 +271,8 @@ export class Solver extends GeometryTool {
             maxIterations: 100
         });
 
-        this.ui.toolbar.updateFeedback(score || '-');
+        console.info('solve', { solved, score });
+        this.ui.toolbar.updateFeedback(score || 1);
         if (!solved) { alert('Warning: Problem could not be fully solved with the given data.'); return; }
 
         const solvedAngle = clonedData.angles.find(a => a.name === targetAngle.name);
