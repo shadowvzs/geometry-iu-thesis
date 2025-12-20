@@ -78,6 +78,7 @@ export class GeometryTool {
     // Class properties with types
     public messagingHub!: MessagingHub;
     public ui!: UI;
+    public problemName: string = '';
     public points: Point[] = [];
     public pointsMap: Map<string, Point> = new Map();
     public adjacentPoints: Map<string, Set<string>> = new Map();
@@ -2409,6 +2410,9 @@ export class GeometryTool {
     public loadData(rawData: SerializedGeometryData) {
         // Deserialize and normalize the data
         const data = deserializeGeometryData(rawData);
+
+        this.problemName = data.name || '';
+        this.ui.toolbar.setProblemName(this.problemName, this.mode === 'solver');
         
         // Validate the data
         const validation: ValidationResult = validateGeometryData(data);
@@ -2433,7 +2437,7 @@ export class GeometryTool {
             triangles
         } = enrichGeometryData(data, this.scale);
 
-
+        this.problemName = data.name || '';
         this.definitions = definitions;
         this.adjacentPoints = adjacentPoints;
         this.points = points;

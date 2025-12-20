@@ -7,6 +7,40 @@
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
+.toolbar .page-title-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.toolbar .page-title-section h1 {
+    margin-bottom: 0;
+    white-space: nowrap;
+    padding-right: 16px;
+}
+
+.toolbar .page-title-section .problem-name {
+    width: 250px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.toolbar .page-title-section .problem-name-button {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    background: #34495e;
+    color: white;
+    cursor: pointer;
+}
+
+.toolbar .page-title-section .problem-name-input {
+    padding: 4px 8px;
+    width: 250px;
+}
+
 .toolbar-header {
     display: flex;
     align-items: center;

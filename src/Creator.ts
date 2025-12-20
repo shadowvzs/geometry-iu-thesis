@@ -96,6 +96,7 @@ export class Creator extends GeometryTool {
     setupMessageSubscriptions = () => {
         // Toolbar events
         this.messagingHub.subscribe(Messages.TOOL_SELECTED, (tool: ToolName) => this.setTool(tool));
+        this.messagingHub.subscribe(Messages.UPDATE_PROBLEM_NAME, (name: string) => this.problemName = name);
         this.messagingHub.subscribe(Messages.TOGGLE_NAMES, () => this.togglePointNames());
         this.messagingHub.subscribe(Messages.SAVE_REQUESTED, () => this.saveToClipboard());
         this.messagingHub.subscribe(Messages.LOAD_REQUESTED, () => {
@@ -478,6 +479,7 @@ export class Creator extends GeometryTool {
             return;
         }
         const encodedData = serializeStateForUrl({
+            name: this.problemName,
             points: this.points,
             edges: this.edges,
             circles: this.circles,
@@ -742,6 +744,7 @@ export class Creator extends GeometryTool {
     saveToClipboard = () => {
         // Serialize geometry data to JSON format
         const data = serializeGeometryData({
+            name: this.problemName,
             points: this.points,
             edges: this.edges,
             circles: this.circles,

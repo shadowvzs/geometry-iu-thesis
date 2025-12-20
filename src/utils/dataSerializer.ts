@@ -30,6 +30,7 @@ import { deepClone } from './objectHelper';
  * Serialize geometry data to JSON-compatible format
  */
 export function serializeGeometryData(geometryData: {
+    name?: string;
     points?: Point[];
     edges?: Edge[];
     circles?: Circle[];
@@ -46,7 +47,7 @@ export function serializeGeometryData(geometryData: {
         definitions = []
     } = geometryData;
 
-    const result: SerializedGeometryData & { definitions?: Definition[] } = {
+    const result: SerializedGeometryData = {
         points: points.map(point => {
             const serialized: SerializedPoint = {
                 id: point.id,
@@ -88,6 +89,8 @@ export function serializeGeometryData(geometryData: {
         lines: lines.map(line => line.points)
     };
 
+    if (geometryData.name) result.name = geometryData.name;
+
     if (definitions && definitions.length > 0) {
         result.definitions = definitions.map(def => ({
             id: def.id,
@@ -102,10 +105,9 @@ export function serializeGeometryData(geometryData: {
 /**
  * Deserialize JSON data to normalized format for loading
  */
-export function deserializeGeometryData(jsonData: Partial<SerializedGeometryData> & { 
-    triangles?: string[][] 
-}): NormalizedGeometryData {
+export function deserializeGeometryData(jsonData: Partial<SerializedGeometryData>): NormalizedGeometryData {
     const normalized: NormalizedGeometryData = {
+        name: jsonData.name,
         points: [],
         edges: [],
         circles: [],
@@ -171,14 +173,14 @@ export function deserializeGeometryData(jsonData: Partial<SerializedGeometryData
         normalized.lines = deepClone(jsonData.lines);
     }
 
-    if (jsonData.triangles && Array.isArray(jsonData.triangles)) {
-        normalized.triangles = jsonData.triangles.map(triangle => {
-            if (Array.isArray(triangle)) {
-                return triangle;
-            }
-            return [];
-        });
-    }
+    // if (jsonData.triangles && Array.isArray(jsonData.triangles)) {
+    //     normalized.triangles = jsonData.triangles.map(triangle => {
+    //         if (Array.isArray(triangle)) {
+    //             return triangle;
+    //         }
+    //         return [];
+    //     });
+    // }
 
     return normalized;
 }
@@ -385,6 +387,7 @@ export const enrichGeometryData = (data: NormalizedGeometryData, scale: number =
 };
 
 export const serializeStateForUrl = ({
+    name,
     points,
     edges,
     circles,
@@ -392,6 +395,7 @@ export const serializeStateForUrl = ({
     lines,
     definitions
 }: {
+    name?: string;
     points: Point[];
     edges: Edge[];
     circles: Circle[];
@@ -403,7 +407,7 @@ export const serializeStateForUrl = ({
         alert('No angles to solve!');
         return;
     }
-    const data = serializeGeometryData({ points, edges, circles, angles, lines, definitions });
+    const data = serializeGeometryData({ name, points, edges, circles, angles, lines, definitions });
     data.angles
         .filter(angle => angle.l)
         .forEach(angle => {

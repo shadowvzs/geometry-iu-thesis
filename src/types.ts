@@ -287,6 +287,7 @@ export interface GeometryData {
 
 /** Serialized geometry data for JSON storage */
 export interface SerializedGeometryData {
+    name?: string;
     points: SerializedPoint[];
     edges: SerializedEdge[];
     circles: SerializedCircle[];
@@ -297,6 +298,7 @@ export interface SerializedGeometryData {
 
 /** Normalized data structure from deserialization */
 export interface NormalizedGeometryData {
+    name?: string;
     points: Point[];
     edges: Edge[];
     circles: Circle[];

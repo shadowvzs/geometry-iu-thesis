@@ -98,6 +98,7 @@ export const Messages = {
     UNDO_REQUESTED: 'tool:undo',
     REDO_REQUESTED: 'tool:redo',
     CLEAR_REQUESTED: 'tool:clear',
+    UPDATE_PROBLEM_NAME: 'tool:updateProblemName',
 
     // Canvas Events
     CANVAS_CLICKED: 'canvas:clicked',

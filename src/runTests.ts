@@ -81,12 +81,12 @@ const runAllTests = () => {
             console.log(`\n  Results:`);
             console.log(`    Iterations: ${solveResult.iterations}`);
             console.log(`    Time: ${solveResult.executionTime.toFixed(2)}ms`);
-            console.log(`    Valid: ${solveResult.isValid ? '✅' : '❌'}`);
-            console.log(`    Solved: ${solvedAngles}/${anglesCount} angles`);
+            // console.log(`    Valid: ${solveResult.isValid ? '✅' : '❌'}`);
+            // console.log(`    Solved: ${solvedAngles}/${anglesCount} angles`);
             if (targetAngles > 0) {
                 console.log(`    Targets: ${targetSolved}/${targetAngles} solved`);
             }
-            console.log(`    All Solved: ${solveResult.allSolved ? '✅' : '❌'}`);
+            // console.log(`    All Solved: ${solveResult.allSolved ? '✅' : '❌'}`);
             console.log(`    Score: ${solveResult.score}`);
 
         } catch (error) {
