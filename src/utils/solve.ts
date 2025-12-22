@@ -46,13 +46,13 @@ export interface SolveDataWithMaps extends SolveData {
 }
 
 const scores: Record<string, number> = {
-    applySameLabelAngles: 1,
-    applySupplementaryAngles: 2,
-    applyTriangleAngleSum: 3,
-    applyComposedAngles: 2,
-    applyMirrorAngle: 1,
-    applySameAngles: 0,
-    applyFullAngleSum: 3,
+    [applySameLabelAngles.name]: 1,
+    [applySupplementaryAngles.name]: 2,
+    [applyTriangleAngleSum.name]: 3,
+    [applyComposedAngles.name]: 2,
+    [applyMirrorAngle.name]: 1,
+    [applySameAngles.name]: 0,
+    [applyFullAngleSum.name]: 3,
 };
 
 export const solve = (

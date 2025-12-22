@@ -382,6 +382,7 @@ const extractIsoscelesEquations = (
             : new Set(triangleData);
         
         const triangleAngles = getTriangleAngles(triangle, angles, lines);
+        const triangleArray = Array.from(triangleData) as [string, string, string];
         if (triangleAngles.length !== 3) return;
         
         // Check for equilateral triangle (all same label)

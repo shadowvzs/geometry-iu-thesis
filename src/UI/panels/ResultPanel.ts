@@ -122,7 +122,7 @@ export class ResultPanel extends Panel {
     updatePanel = (angle: Angle, solvedAngle: Angle): void => {
         this.angle = angle;
         this.solvedAngle = solvedAngle;
-        this.finalResultForElement.textContent = `${angle.name} = `;
+        this.finalResultForElement.textContent = `${angle.label || angle.name} = `;
     }
 }
 

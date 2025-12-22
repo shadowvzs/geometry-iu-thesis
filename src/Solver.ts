@@ -272,6 +272,7 @@ export class Solver extends GeometryTool {
         });
 
         console.info('solve', { solved, score });
+
         this.ui.toolbar.updateFeedback(score || 1);
         if (!solved) { alert('Warning: Problem could not be fully solved with the given data.'); return; }
 

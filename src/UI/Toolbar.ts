@@ -20,7 +20,7 @@ interface ButtonInfo {
 const getDefaultButtonConfigs = (): Record<string, ButtonConfig> => ({
     pointer: {
         icon: ToolbarIcons.pointer,
-        title: 'Pointer Tool (Click to select/edit elements)',
+        title: 'Pointer Tool',
         action: 'setTool',
         params: ['pointer']
     },
@@ -45,7 +45,7 @@ const getDefaultButtonConfigs = (): Record<string, ButtonConfig> => ({
     },
     assignAngle: {
         icon: ToolbarIcons.assignAngle,
-        title: 'Assign Angle Value (Click on angle)',
+        title: 'Edit the angle value, label, size, target etc',
         action: 'setTool',
         params: ['assignAngle']
     },
