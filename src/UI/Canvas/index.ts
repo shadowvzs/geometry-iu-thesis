@@ -1,8 +1,10 @@
-import { createElement } from "../utils/domHelper";
-import { degreesToRadians } from "../utils/mathHelper";
-import { MessagingHub, Messages } from "../MessagingHub";
-import { Point, AngleEditRequestData, Rect } from "../types";
-import { ShowAngleEditorPopover } from "./popover/EditAngle";
+import { createElement } from "../../utils/domHelper";
+import { degreesToRadians } from "../../utils/mathHelper";
+import { MessagingHub, Messages } from "../../MessagingHub";
+import { Point, AngleEditRequestData, Rect, ExportImageData } from "../../types";
+import { ShowAngleEditorPopover } from "../popover/EditAngle";
+import SvgCss from "./SvgCss";
+import { exportSvgAsPng, exportSvgAsSvg } from "@/utils/fileExport";
 
 export class Canvas {
     private messagingHub: MessagingHub;
@@ -28,15 +30,16 @@ export class Canvas {
             this.showAngleEditor(data);
         });
         
-        this.messagingHub.subscribe(Messages.LOAD_REQUESTED, () => {
-            this.showLoadDialog();
-        });
+        this.messagingHub.subscribe(Messages.LOAD_REQUESTED, this.showLoadDialog);
+        this.messagingHub.subscribe(Messages.EXPORT_SVG, this.exportSvg);
     }
 
     initialize = (): HTMLElement => {
         // Create canvas container
+        const svgClass = document.body.classList.contains('solver-mode') ? 'solver-mode' : '';
         this.container = createElement('div', { class: 'canvas-container' }, [
-            ['svg', { id: 'geometryCanvas', width: '100%', height: '100%' }, [
+            ['svg', { id: 'geometryCanvas', class: `svg-canvas ${svgClass}`, width: '100%', height: '100%' }, [
+                ['style', { type: 'text/css' }, [SvgCss]],
                 ['defs', {}, [
                     ['marker', { id: 'arrowhead', markerWidth: '10', markerHeight: '10', refX: '9', refY: '3', orient: 'auto' }, [
                         ['polygon', { points: '0 0, 10 3, 0 6', fill: '#666' }]
@@ -61,6 +64,14 @@ export class Canvas {
         this.setupSubscriptions();
 
         return this.container;
+    }
+
+    exportSvg = (data: ExportImageData): void => {
+        if (data.type === 'svg') {
+            exportSvgAsSvg(this.svg, data.name);
+        } else if (data.type === 'png') {
+            exportSvgAsPng(this.svg, data.name);
+        }
     }
 
     clearContent = (): void => {

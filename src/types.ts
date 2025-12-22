@@ -73,6 +73,11 @@ export interface SolverHistoryItem {
 // =============================================================================
 
 /** Point entity - represents a point on the canvas */
+export interface ExportImageData {
+    name: string;
+    type: ExportImageType;
+}
+export type ExportImageType = 'png' | 'svg';
 export interface Position {
     x: number;
     y: number;

@@ -1,4 +1,4 @@
-import { MessagingHub } from "../MessagingHub";
+import { MessagingHub } from "../../MessagingHub";
 import { Panel } from "./Panel";
 
 type PanelClass = new (messagingHub: MessagingHub) => Panel & { initialize(): Panel };

@@ -45,7 +45,7 @@ import {
 } from './utils/dataSerializer';
 import { deepClone } from './utils/objectHelper';
 import { UI } from './UI/index';
-import { initDraggablePanels } from './UI/DraggablePanel';
+import { initDraggablePanels } from './UI/panels/DraggablePanel';
 
 import type {
     Point,
@@ -1394,9 +1394,13 @@ export class GeometryTool {
             hasTextOverlap = false;
             
             // Query DOM directly for text elements at THIS vertex only
-            const anglesAtVertex = this.svgGroup.angle.querySelectorAll(
-                `[data-angle-vertex-id="${angleData.pointId}"] text`
-            );
+            const anglesAtVertex = this.mode === 'solver' 
+               ? this.svgGroup.angle.querySelectorAll(
+                    `[data-angle-vertex-id="${angleData.pointId}"]:not(.creator-only) text`
+                )
+                : this.svgGroup.angle.querySelectorAll(
+                    `[data-angle-vertex-id="${angleData.pointId}"] text`
+                );
             
             for (const existingTextElement of anglesAtVertex) {
                 // Skip if this is the element we're updating

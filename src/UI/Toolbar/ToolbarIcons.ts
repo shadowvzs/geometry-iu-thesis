@@ -112,5 +112,18 @@ export const ToolbarIcons = {
         <line x1="10" y1="10" x2="10" y2="17" stroke="currentColor" stroke-width="1.5"/>
         <line x1="14" y1="10" x2="14" y2="17" stroke="currentColor" stroke-width="1.5"/>
     </svg>`,
+
+    exportImage: `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <!-- Image placeholder with rounded corners -->
+        <rect x="3" y="3" width="14" height="14" rx="1.5" ry="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <!-- Mountains (two triangular peaks) -->
+        <path d="M5 14 L8 10 L11 14 Z" fill="currentColor"/>
+        <path d="M9 14 L12 9 L15 14 Z" fill="currentColor"/>
+        <!-- Sun/moon circle -->
+        <circle cx="16" cy="6" r="2" fill="currentColor"/>
+        <!-- Export circle with downward arrow (overlapping bottom-right) -->
+        <circle cx="16" cy="16" r="4" fill="currentColor"/>
+        <path d="M16 13 L16 18 M13 16 L16 18 L19 16" stroke="black" stroke-width="1" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`,
 };
 

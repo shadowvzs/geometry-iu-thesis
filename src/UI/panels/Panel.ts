@@ -1,4 +1,4 @@
-import { createElement } from "../utils/domHelper";
+import { createElement } from "../../utils/domHelper";
 
 interface PanelConfig {
     id: string;

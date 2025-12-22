@@ -99,7 +99,8 @@ export const Messages = {
     REDO_REQUESTED: 'tool:redo',
     CLEAR_REQUESTED: 'tool:clear',
     UPDATE_PROBLEM_NAME: 'tool:updateProblemName',
-
+    EXPORT_SVG: 'tool:exportSvg',
+    
     // Canvas Events
     CANVAS_CLICKED: 'canvas:clicked',
     POINT_CLICKED: 'canvas:pointClicked',

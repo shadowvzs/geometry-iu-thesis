@@ -21,6 +21,8 @@ import type {
     PointCreateRequestData,
     PointDraggingData,
     SerializedGeometryData,
+    ExportImageType,
+    ExportImageData,
 } from './types';
 import { GeometryTool } from './GeometryTool';
 import { getSvgElementData } from './utils/elementHelper';
@@ -56,9 +58,21 @@ export class Solver extends GeometryTool {
         registerButton('drawPoint', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'addPoint'));
         registerButton('drawCircle', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'drawCircle'));
         registerButton('drawEdge', () => this.messagingHub.emit(Messages.TOOL_SELECTED, 'drawEdge'));
+        registerButton('exportImage', this.exportImage);
 
         registerButton('undo', () => this.messagingHub.emit(Messages.UNDO_REQUESTED));
         registerButton('redo', () => this.messagingHub.emit(Messages.REDO_REQUESTED));
+    }
+
+    exportImage = (_ev: Event, type?: string) => {
+        if (!type) { return console.error('export image type not found', type); }
+        this.messagingHub.emit<ExportImageData>(
+            Messages.EXPORT_SVG,
+            {
+                name: this.problemName,
+                type: type as ExportImageType
+            }
+        );
     }
 
     registerPanels = () => {

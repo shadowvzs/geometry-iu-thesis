@@ -1,5 +1,5 @@
 import { Toolbar } from "./Toolbar";
-import { PanelManager } from "./PanelManager";
+import { PanelManager } from "./panels";
 import { createElement } from "../utils/domHelper";
 import { Canvas } from "./Canvas";
 import { MessagingHub } from "../MessagingHub";

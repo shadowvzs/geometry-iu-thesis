@@ -1,4 +1,4 @@
-import { Panel } from '../Panel';
+import { Panel } from './Panel';
 import { createElement } from '../../utils/domHelper';
 import { MessagingHub } from '../../MessagingHub';
 import { Definition } from '../../types';

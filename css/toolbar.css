@@ -118,3 +118,36 @@
     font-size: 12px;
     color: #ecf0f1;
 }
+
+.toolbar .tool-btn-wrapper {
+    position: relative;
+}
+.toolbar .tool-btn-wrapper .tool-btn-options {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: #2c3e50;
+    color: white;
+    padding: 8px;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    display: none;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    z-index: 1000;
+
+}
+.toolbar .tool-btn-wrapper .tool-btn-options .tool-btn-option {
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.toolbar .tool-btn-wrapper .tool-btn-options .tool-btn-option:hover {
+    background: #4a6278;
+}
+
+.toolbar .tool-btn-wrapper:hover .tool-btn-options {
+    display: block;
+}
