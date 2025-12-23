@@ -1,11 +1,11 @@
 import testdata from './data/index';
 import { deserializeGeometryData, enrichGeometryData, validateGeometryData } from './utils/dataSerializer';
-import { solve, type SolveResult } from './utils/solve';
-import type { Angle, SerializedGeometryData } from './types';
+import { solve } from './solver-algorithm';
+import type { Angle, SerializedGeometryData, SolverResults } from './types';
 
 interface TestResult {
     name: string;
-    result: SolveResult;
+    result: SolverResults;
     anglesCount: number;
     solvedAngles: number;
     targetAngles: number;
@@ -79,7 +79,7 @@ const runAllTests = () => {
 
             // Print result
             console.log(`\n  Results:`);
-            console.log(`    Iterations: ${solveResult.iterations}`);
+            console.log(`    Iterations: ${solveResult.score}`);
             console.log(`    Time: ${solveResult.executionTime.toFixed(2)}ms`);
             // console.log(`    Valid: ${solveResult.isValid ? '✅' : '❌'}`);
             // console.log(`    Solved: ${solvedAngles}/${anglesCount} angles`);
@@ -99,8 +99,8 @@ const runAllTests = () => {
     console.log('SUMMARY');
     console.log('='.repeat(80));
     
-    const passed = results.filter(r => r.result.allSolved || (r.targetAngles > 0 && r.targetSolved === r.targetAngles));
-    const failed = results.filter(r => !r.result.allSolved && (r.targetAngles === 0 || r.targetSolved !== r.targetAngles));
+    const passed = results.filter(r => r.targetAngles > 0 && r.targetSolved === r.targetAngles);
+    const failed = results.filter(r => r.targetAngles === 0 || r.targetSolved !== r.targetAngles);
 
     console.log(`\nTotal: ${results.length} tests`);
     console.log(`Passed: ${passed.length} ✅`);

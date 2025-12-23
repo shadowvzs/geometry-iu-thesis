@@ -1,49 +1,21 @@
-import type { Angle, Point, Line, Triangle, Circle } from '../types';
+import type { SolveData, SolveOptions, TheoremSolverResult, SolveDataWithMaps } from '@/types';
 import { 
     areAllTrianglesValid,
     getAngleMapsByPointId,
     getAnglesNeedToBeSolved,
     getAnglesAlreadySolved,
-    validateAllTriangles,
     isSolvedAngle,
-} from './mathHelper';
+} from '@/utils/mathHelper';
 
-import { applySameLabelAngles } from '../rules/applySameLabelAngles';
-import { applyTriangleAngleSum } from '../rules/applyTriangleAngleSum';
-import { applySupplementaryAngles } from '../rules/applySupplementaryAngles';
-import { applySameAngles } from '../rules/applySameAngles';
-import { applyComposedAngles } from '../rules/applyComposedAngles';
-import { applyMirrorAngle } from '../rules/applyMirrorAngle';
-import { applyFullAngleSum } from '../rules/applyFullAngleSum';
-
-export interface SolveData {
-    angles: Angle[];
-    points: Point[];
-    lines: Line[];
-    triangles: Triangle[] | string[][];
-    circles: Circle[];
-    adjacentPoints: Map<string, Set<string>>;
-}
-
-export interface SolveOptions {
-    setAngle: (angle: Angle, reason: string, ruleName: string) => void;
-    maxIterations?: number;
-}
-
-export interface SolveResult {
-    isValid: boolean;
-    executionTime: number;
-    iterations: number;
-    solved: boolean;
-    allSolved: boolean;
-    score: number | string;
-}
+import { applySameLabelAngles } from './applySameLabelAngles';
+import { applyTriangleAngleSum } from './applyTriangleAngleSum';
+import { applySupplementaryAngles } from './applySupplementaryAngles';
+import { applySameAngles } from './applySameAngles';
+import { applyComposedAngles } from './applyComposedAngles';
+import { applyMirrorAngle } from './applyMirrorAngle';
+import { applyFullAngleSum } from './applyFullAngleSum';
 
 type SolverMethod = (data: SolveDataWithMaps, log: SolveOptions['setAngle']) => boolean;
-
-export interface SolveDataWithMaps extends SolveData {
-    angleMapsByPointId: Record<string, Angle[]>;
-}
 
 const scores: Record<string, number> = {
     [applySameLabelAngles.name]: 1,
@@ -55,10 +27,10 @@ const scores: Record<string, number> = {
     [applyFullAngleSum.name]: 3,
 };
 
-export const solve = (
+export const solveWithTheorems = (
     { angles, points, lines, triangles, circles, adjacentPoints }: SolveData, 
     { setAngle, maxIterations = 100 }: SolveOptions
-): SolveResult => {
+): TheoremSolverResult => {
     const startTime = performance.now();
 
     const data: SolveDataWithMaps = {
@@ -117,12 +89,7 @@ export const solve = (
     if (iterations >= maxIterations) {
         console.warn(`⚠️  Reached max iterations (${iterations}). Solver may be in infinite loop.`);
     }
-    
-    const triangleArrays = triangles.map(t => 
-        t instanceof Set ? Array.from(t) : t
-    ) as string[][];
-    
-    const isValid = validateAllTriangles(triangleArrays, angles);
+
     const solved = anglesNeedToBeSolved.length > 0 && anglesNeedToBeSolved.every(a => isSolvedAngle(a));
     const allSolved = angles.length > 0 && getAnglesAlreadySolved(angles).length === angles.length;
     
@@ -130,7 +97,6 @@ export const solve = (
     const executionTime = endTime - startTime;
 
     return {
-        isValid,
         executionTime,
         iterations,
         solved,

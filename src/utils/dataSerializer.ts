@@ -173,15 +173,6 @@ export function deserializeGeometryData(jsonData: Partial<SerializedGeometryData
         normalized.lines = deepClone(jsonData.lines);
     }
 
-    // if (jsonData.triangles && Array.isArray(jsonData.triangles)) {
-    //     normalized.triangles = jsonData.triangles.map(triangle => {
-    //         if (Array.isArray(triangle)) {
-    //             return triangle;
-    //         }
-    //         return [];
-    //     });
-    // }
-
     return normalized;
 }
 

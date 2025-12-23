@@ -493,15 +493,58 @@ export interface UpdateAngleData {
 }
 
 /** Solve options */
+export interface SolveData {
+    angles: Angle[];
+    points: Point[];
+    lines: Line[];
+    triangles: Triangle[] | string[][];
+    circles: Circle[];
+    adjacentPoints: Map<string, Set<string>>;
+}
+
+export interface SolveDataWithMaps extends SolveData {
+    angleMapsByPointId: Record<string, Angle[]>;
+}
+
+
 export interface SolveOptions {
-    setAngle: (angle: Angle, value: number) => void;
+    setAngle: (angle: Angle, reason: string, ruleName: string) => void;
     maxIterations?: number;
 }
 
-/** Solve result */
-export interface SolveResult {
+/** Solve related types */
+export type AugmentedMatrixResult = {
+    variables: string[];
+    augmentedMatrix: number[][];
+};
+
+export interface SolverTechniqueResult {
     solved: boolean;
-    score?: number | string;
+    allSolved: boolean;
+    score: number;
+    executionTime: number;
+}
+
+export interface TheoremSolverResult extends SolverTechniqueResult {
+    iterations: number;
+}
+
+export interface SolvedEquation extends SolverTechniqueResult {
+    solution: Record<string, number>;
+}
+
+export interface EquationSolverResult {
+    hybrid: SolvedEquation;
+    rref: SolvedEquation;
+}
+
+export interface SolverResults {
+    theorems: TheoremSolverResult;
+    equationHybrid: SolvedEquation;
+    equationRref: SolvedEquation;
+    solved: boolean;
+    score: number;
+    executionTime: number;
 }
 
 // =============================================================================

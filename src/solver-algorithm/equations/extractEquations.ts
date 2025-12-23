@@ -1,5 +1,4 @@
-import type { SolveDataWithMaps } from '@/utils/solve';
-import type { Angle, Point, Triangle } from '../types';
+import type { Angle, AugmentedMatrixResult, Point, SolveDataWithMaps, Triangle } from '@/types';
 import {
     pointToAngle,
     getTriangleAngles,
@@ -7,7 +6,8 @@ import {
     searchVertexAngleInIsoscelesTriangle,
     getAngleValue,
     isSameRay,
-} from '../utils/mathHelper';
+} from '@/utils/mathHelper';
+import { GREEK_LETTERS } from '@/data/constants';
 
 /**
  * Extract all geometric relationships as string equations without solving.
@@ -231,7 +231,8 @@ const extractComposedEquations = (
                     
                     if (parentValue && knownChildValues.length > 0 && unknownChildren.length === 1) {
                         // Format: ∠Parent=parentValue-knownChild1-knownChild2 (matches solver format)
-                        equations.push(`${parentAngle.name}=${parentValue}-${knownChildValues.join('-')}`);
+                        const parentAngleValue = parentValue - knownChildValues.reduce((acc, c) => acc + c, 0);
+                        equations.push(`${parentAngle.name}=${parentAngleValue}`);
                     }
                 }
             }
@@ -367,7 +368,7 @@ const extractIsoscelesEquations = (
                 
                 if (vertexAngle && baseAngle1 && baseAngle2) {
                     // Vertex angle: ∠Vertex=180-∠Base1-∠Base2
-                    equations.push(`${vertexAngle.name}=180-${baseAngle1.name}-${baseAngle2.name}`);
+                    equations.push(`${vertexAngle.name}=180-${baseAngle1.name}-${baseAngle2.name}`);                   equations.push(`${vertexAngle.name}=180-${baseAngle1.name}-${baseAngle2.name}`);
                 }
             }
         }
@@ -874,9 +875,10 @@ export const simplifyEquations = (
             // Use regex to replace exact matches
             simplified = simplified.split(name).join(char);
         });
+
         return simplified;
     });
-    
+
     return {
         equations: [...new Set(simplifiedEquations)], // Deduplicate
         mapping,
@@ -935,14 +937,12 @@ const findSpanningPaths = (
  */
 export const cleanEquationsForWolfram = (equations: string[]): string[] => {
     return equations
-        .map(eq => eq
-            .replace(/α/g, 'alpha')
-            .replace(/β/g, 'beta')
-            .replace(/γ/g, 'gamma')
-            .replace(/δ/g, 'delta')
-            .replace(/ε/g, 'epsilon')
-            .replace(/θ/g, 'theta')
-        )
+        .map(eq => {
+            GREEK_LETTERS.forEach(greekLetter => {
+                eq = eq.replace(greekLetter.letter, greekLetter.name);
+            });
+            return eq;
+        })
         .filter(eq => {
             const parts = eq.split('=');
             // Remove identity equations like "a=a"
@@ -950,7 +950,8 @@ export const cleanEquationsForWolfram = (equations: string[]): string[] => {
             // Remove label assignments like "c=alpha"
             if (/=[a-z]+$/.test(eq) && !eq.includes('+') && !eq.includes('-') && !eq.includes('(')) {
                 const rhs = parts[1];
-                if (['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'theta'].includes(rhs)) return false;
+                const isGreekLetter = GREEK_LETTERS.some(greekLetter => greekLetter.name === rhs);
+                if (isGreekLetter) return false;
             }
             return true;
         });
@@ -970,7 +971,7 @@ export const generateWolframUrl = (equations: string[], targets: string[]): stri
 /**
  * Result type for equation extraction with Wolfram support
  */
-export interface EquationExtractionResult {
+export interface EquationExtractionResultForWolfram {
     equations: string[];
     simplified: string[];
     wolframUrl: string;
@@ -978,10 +979,92 @@ export interface EquationExtractionResult {
     reverseMapping: Map<string, string[]>;
 }
 
+export interface EquationExtractionResultForMatrix {
+    equations: string[];
+    simplified: string[];
+    augmentedMatrix: AugmentedMatrixResult;
+    mapping: Map<string, string>;
+    reverseMapping: Map<string, string[]>;
+}
+
+export function equationsToAugmentedMatrix(
+    equations: string[],
+    greekLetters = GREEK_LETTERS
+  ): AugmentedMatrixResult {
+    // matches either a-z OR a Greek symbol
+    const variableRegex = new RegExp(
+      `[a-z${greekLetters.map(g => g.letter).join("")}]`,
+      "g"
+    );
+  
+    // 1️⃣ Collect variables
+    const varSet = new Set<string>();
+    for (const eq of equations) {
+      const matches = eq.match(variableRegex);
+      if (matches) matches.forEach(v => varSet.add(v));
+    }
+  
+    const variables = Array.from(varSet).sort();
+    const varIndex: Record<string, number> = {};
+    variables.forEach((v, i) => (varIndex[v] = i));
+  
+    // 2️⃣ Parse expression
+    function parseExpr(expr: string, sign: number, row: number[]): void {
+      expr = expr.replace(/-/g, "+-");
+      const terms = expr.split("+").filter(Boolean);
+  
+      for (const term of terms) {
+        // constant
+        if (/^-?\d+(\.\d+)?$/.test(term)) {
+          row[row.length - 1] += sign * Number(term);
+          continue;
+        }
+  
+        // coefficient + variable (Latin or Greek)
+        const match = term.match(
+          new RegExp(`^(-?\\d*)(${variableRegex.source})$`)
+        );
+  
+        if (!match) {
+          throw new Error(`Invalid term: ${term}`);
+        }
+  
+        let [, coeff, variable] = match;
+        let numericCoeff: number;
+  
+        if (coeff === "" || coeff === "+") numericCoeff = 1;
+        else if (coeff === "-") numericCoeff = -1;
+        else numericCoeff = Number(coeff);
+  
+        row[varIndex[variable]] += sign * numericCoeff;
+      }
+    }
+  
+    // 3️⃣ Build augmented matrix
+    const augmentedMatrix = equations.map(eq => {
+      const row = new Array(variables.length + 1).fill(0);
+      const clean = eq.replace(/\s+/g, "");
+      const [lhs, rhs] = clean.split("=");
+  
+      if (!lhs || !rhs) {
+        throw new Error(`Invalid equation: ${eq}`);
+      }
+  
+      parseExpr(lhs, 1, row);
+      parseExpr(rhs, -1, row);
+  
+      // move constant to RHS
+      row[row.length - 1] *= -1;
+      return row;
+    });
+  
+    return { variables, augmentedMatrix };
+}
+
 /**
  * Extract equations and generate Wolfram Alpha URL in one call
  */
-export const extractEquationsWithWolfram = (data: SolveDataWithMaps): EquationExtractionResult => {
+export const extractEquationsWithWolfram = (data: SolveDataWithMaps): EquationExtractionResultForWolfram => {
     const equations = extractEquations(data);
     const { equations: simplified, mapping, reverseMapping } = simplifyEquations(equations, data);
     const targets: string[] = data.angles.filter(angle => angle.target).map(angle => mapping.get(angle.name)).filter(name => name !== undefined);

@@ -1,6 +1,6 @@
 // Geometry Drawing Tool - Solver Mode
 import { Messages } from './MessagingHub';
-import { solve } from './utils/solve';
+import { solve } from './solver-algorithm';
 import { 
     findNearbyEdges,
 } from './utils/mathHelper';

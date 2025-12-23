@@ -821,7 +821,7 @@ export function getAngleValue(angle: Pick<Angle, 'value'>): number | null {
 }
 
 export function getUnusedGreekLetter(angles: Angle[]): string {
-    const greekLetters = GREEK_LETTERS;
+    const greekLetters = GREEK_LETTERS.map(l => l.letter);
     const usedLabels = new Set(angles.map(a => a.label).filter(l => l));
     
     for (const letter of greekLetters) {

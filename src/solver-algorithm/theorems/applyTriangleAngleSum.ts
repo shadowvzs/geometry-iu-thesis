@@ -1,5 +1,4 @@
-import type { SolveDataWithMaps } from '@/utils/solve';
-import type { Angle, Triangle } from '../types';
+import type { Angle, Triangle, SolveDataWithMaps } from '@/types';
 import {
     searchVertexAngleInIsoscelesTriangle,
     getTriangleAngles,
@@ -9,8 +8,8 @@ import {
     haveSameLabels,
     isEquilateralTriangleByLabel,
     isEquilateralTriangleByCircles,
-} from '../utils/mathHelper';
-import { validateAngleValue } from '../utils/angleValidation';
+} from '@/utils/mathHelper';
+import { validateAngleValue } from '@/utils/angleValidation';
 
 type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
 
@@ -23,7 +22,7 @@ export const applyTriangleAngleSum = (data: SolveDataWithMaps, log: LogFn): bool
         const triangle: Triangle = triangleData instanceof Set 
             ? triangleData 
             : new Set(triangleData);
-        const triangleArray = Array.from(triangle);
+        const triangleArray = Array.from(triangle) as [string, string, string];
         const triangleAngles = getTriangleAngles(triangle, angles, lines);
 
         if (triangleAngles.length !== 3) {

@@ -1,7 +1,7 @@
-import type { SolveDataWithMaps } from '@/utils/solve';
-import type { Angle } from '../types';
-import { getAngleValue } from '../utils/mathHelper';
-import { validateAngleValue } from '../utils/angleValidation';
+import type { SolveDataWithMaps } from '@/types';
+import type { Angle } from '@/types';
+import { getAngleValue } from '@/utils/mathHelper';
+import { validateAngleValue } from '@/utils/angleValidation';
 
 type LogFn = (angle: Angle, reason: string, ruleName: string) => void;
 

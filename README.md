@@ -35,15 +35,22 @@ src/
 ├── MessagingHub.ts        # Event-driven communication system
 ├── types.ts               # TypeScript type definitions
 │
-├── rules/                 # Solving algorithms
-│   ├── applyTriangleAngleSum.ts
-│   ├── applySupplementaryAngles.ts
-│   ├── applySameLabelAngles.ts
-│   ├── applySameAngles.ts
-│   ├── applyComposedAngles.ts
-│   ├── applyMirrorAngle.ts
-│   ├── applyFullAngleSum.ts
-│   └── extractEquations.ts
+├── solver-algorithm/      # Dual solving approach
+│   ├── index.ts           # Main solver orchestrator
+│   ├── theorems/          # Rule-based theorem solving
+│   │   ├── index.ts       # Theorem solver orchestrator
+│   │   ├── applyTriangleAngleSum.ts
+│   │   ├── applySupplementaryAngles.ts
+│   │   ├── applySameLabelAngles.ts
+│   │   ├── applySameAngles.ts
+│   │   ├── applyComposedAngles.ts
+│   │   ├── applyMirrorAngle.ts
+│   │   └── applyFullAngleSum.ts
+│   └── equations/         # Linear equation solving
+│       ├── index.ts       # Equation solver orchestrator
+│       ├── extractEquations.ts
+│       ├── solveWithEquationHybrid.ts
+│       └── solveWithEquationsRREF.ts
 │
 ├── UI/                    # User interface components
 │   ├── Canvas.ts          # SVG canvas management
@@ -123,7 +130,11 @@ interface Angle {
 
 ## 🔧 Key Components
 
-### Solving Engine (`src/utils/solve.ts`)
+### Solving Engine Architecture
+
+The system uses a **dual-solving approach** combining rule-based theorem solving and linear equation solving:
+
+#### 1. Theorem-Based Solver (`src/solver-algorithm/theorems/`)
 
 The core solving algorithm that orchestrates rule application:
 
@@ -141,8 +152,6 @@ The core solving algorithm that orchestrates rule application:
 6. Composed Angles (medium complexity)
 7. Mirror Angles (lower complexity)
 
-### Geometric Rules (`src/rules/`)
-
 Each rule is a pure function following the interface:
 ```typescript
 (data: SolveDataWithMaps, log: LogFn): boolean
@@ -150,9 +159,47 @@ Each rule is a pure function following the interface:
 
 Returns `true` if any changes were made.
 
+#### 2. Equation-Based Solver (`src/solver-algorithm/equations/`)
+
+A complementary approach that extracts geometric relationships as linear equations and solves them using linear algebra:
+
+**Process**:
+1. **Extract Equations**: Converts geometric relationships to linear equations
+   - Triangle angle sums: `a+b+c=180`
+   - Equal angles: `a=b`
+   - Composed angles: `a=b+c`
+   - Known values: `a=45`
+2. **Simplify**: Maps angle names to single-character variables (a-z, α-ω)
+3. **Solve**: Uses two parallel methods:
+   - **Hybrid Solver**: Symbolic substitution + RREF (faster for simple cases)
+   - **RREF Solver**: Pure Reduced Row Echelon Form (handles all cases)
+4. **Apply Solutions**: Automatically sets angle values via `setAngle` callback
+
+**Return Structure**:
+```typescript
+interface EquationSolverResult {
+    hybrid: SolvedEquation;  // Hybrid solver result
+    rref: SolvedEquation;     // RREF solver result
+}
+
+interface SolvedEquation {
+    solved: boolean;           // All targets solved?
+    allSolved: boolean;        // All variables solved?
+    score: number;             // Number of variables
+    executionTime: number;     // Performance metric
+    solution: Record<string, number>;  // Variable → value mapping
+}
+```
+
+**Key Features**:
+- **Target-based solving**: Only requires target angles to be solved
+- **Unified number formatting**: Consistent precision across both solvers
+- **Automatic application**: Solutions are automatically applied to angles
+- **Dual verification**: Both solvers run in parallel for validation
+
 #### Notable Implementations
 
-**`applySupplementaryAngles.ts`**: Most complex rule
+**`applySupplementaryAngles.ts`**: Most complex theorem rule
 - Uses line-based collinearity detection
 - Validates point ordering to distinguish supplementary from overlapping angles
 - Recursive path finding to identify valid angle combinations
@@ -162,6 +209,16 @@ Returns `true` if any changes were made.
 - Uses `calculatedValue` to validate parent-child relationships
 - Solves based on `value` (assigned values)
 - Handles labeled angles (α, β, γ)
+
+**`solveWithEquationHybrid.ts`**: Efficient hybrid solver
+- Auto-detects variables (supports Unicode, Greek letters, multi-character)
+- Three-phase approach: substitution → RREF → final evaluation
+- Optimized for cases with many simple equations
+
+**`solveWithEquationsRREF.ts`**: Complete RREF solver
+- Handles all linear systems (unique, infinite, inconsistent)
+- Detects free variables and inconsistent systems
+- Pure matrix-based approach
 
 ### SVG Rendering System
 
@@ -272,6 +329,38 @@ function getAngleCalculatedInfo(vertex, point1, point2) {
 2. Validates using calculated values: `childrenSum ≈ parent.calculatedValue`
 3. Solves based on assigned values: `parent.value = sum(childValues)`
 
+### Equation Extraction and Solving
+
+**Equation Extraction** (`extractEquations.ts`):
+1. Extracts 10 types of geometric relationships:
+   - Triangle angle sums
+   - Supplementary angles (180°)
+   - Composed angles
+   - Equal angles (vertical, same label)
+   - Isosceles triangle relationships
+   - Mirror angles
+   - Full circle (360°)
+   - Known values
+   - Label assignments
+2. Converts to string equations: `"a+b+c=180"`, `"a=b"`, etc.
+
+**Equation Simplification**:
+- Maps angle names (e.g., `∠ABC`) to single characters (e.g., `a`)
+- Groups equal angles together (same variable)
+- Handles Greek letters and Unicode identifiers
+
+**Hybrid Solving** (`solveWithEquationHybrid`):
+1. **Phase 1 - Substitution**: Solves equations of form `x = constant`
+2. **Phase 2 - RREF**: Uses Gaussian elimination for remaining system
+3. **Phase 3 - Final Evaluation**: Solves equations with one unknown
+4. **Number Formatting**: Snaps near-integers and rounds to 7 decimals
+
+**RREF Solving** (`solveWithEquationsRREF`):
+1. Builds augmented matrix from equations
+2. Performs Reduced Row Echelon Form (Gauss-Jordan elimination)
+3. Extracts solutions from pivot columns
+4. Detects inconsistent systems and free variables
+
 ## 🧪 Testing
 
 Test cases are stored in `src/data/testdata*.json`. The test runner (`src/runTests.ts`) validates:
@@ -288,9 +377,25 @@ npm test
 
 - **Efficient Data Structures**: Maps for O(1) angle lookup by vertex
 - **Early Termination**: Stops when all targets solved
+- **Dual Solving**: Theorem and equation solvers run in parallel
+- **Hybrid Optimization**: Symbolic substitution before RREF reduces matrix size
+- **Unified Formatting**: Single number formatting function for consistency
 - **Data Attributes**: Reduces DOM queries
 - **SVG Grouping**: Minimizes DOM manipulation
 - **Iteration Limits**: Prevents infinite loops (max 100 iterations)
+
+### Solver Performance
+
+**Theorem Solver**:
+- Best for: Problems with clear geometric relationships
+- Typical time: < 10ms for most problems
+- Iterative approach with early termination
+
+**Equation Solvers**:
+- **Hybrid**: Typically 0.5-1ms (fastest for simple systems)
+- **RREF**: Typically 0.5-2ms (handles all cases)
+- Both run in parallel for verification
+- Automatic solution application via `setAngle` callback
 
 ## 🔍 Technical Decisions
 
@@ -325,12 +430,19 @@ Explicit line definitions with point ordering:
 
 ## 📝 Development Notes
 
-### Adding a New Rule
+### Adding a New Theorem Rule
 
-1. Create file in `src/rules/`
+1. Create file in `src/solver-algorithm/theorems/`
 2. Implement function: `(data: SolveDataWithMaps, log: LogFn): boolean`
-3. Add to `angleSolverMethods` array in `src/utils/solve.ts`
+3. Add to solver methods array in `src/solver-algorithm/theorems/index.ts`
 4. Add score in `scores` object
+
+### Adding a New Equation Type
+
+1. Add extraction function in `src/solver-algorithm/equations/extractEquations.ts`
+2. Call it from `extractEquations()` function
+3. Ensure equations follow format: `"variable1+variable2=constant"` or `"variable1=variable2"`
+4. Both solvers will automatically handle the new equation type
 
 ### SVG Element Management
 

@@ -3,7 +3,7 @@ import { Messages } from './MessagingHub';
 import { DefinitionsPanel } from './UI/panels/DefinitionsPanel';
 import { JsonPanel } from './UI/panels/JsonPanel';
 import { DebugPanel } from './UI/panels/DebugPanel';
-import { solve, SolveResult } from './utils/solve';
+import { solve } from './solver-algorithm';
 import { 
     getAngleMapsByPointId,
     isPointsOnSameLine,
@@ -33,12 +33,12 @@ import type {
     PointClickData,
     AngleClickData,
     PointDraggingData,
-    UpdateAngleData
+    UpdateAngleData,
+    SolverResults
 } from './types';
 import { GeometryTool } from './GeometryTool';
 import { testdata } from './testdata';
-import { extractEquationsWithWolfram } from './rules/extractEquations';
-
+import { extractEquationsWithWolfram } from './solver-algorithm/equations/extractEquations';
 export class Creator extends GeometryTool {
     constructor() {
         super('creator');
@@ -328,10 +328,10 @@ export class Creator extends GeometryTool {
 
     // --- end inherited methods ---
 
-    handleAngleSolveCompleted = (data: SolveResult) => {
+    handleAngleSolveCompleted = (data: SolverResults) => {
         const timeStr = data.executionTime ? ` in ${data.executionTime.toFixed(2)}ms` : '';
         console.info('Creator.handleAngleSolveCompleted', timeStr, data);
-        this.updateStatus(`✓ Angle solving complete (${data.iterations} iterations, ${data.score} scores)`);
+        this.updateStatus(`✓ Angle solving complete (${data.score} score`);
         this.saveState();
     };
 
@@ -506,8 +506,8 @@ export class Creator extends GeometryTool {
             angleMapsByPointId,
         });
         
-        const { simplified, wolframUrl, reverseMapping } = extractEquationsWithWolfram(data);
-        
+        const equationResultForWolfram = extractEquationsWithWolfram(data);
+        const { simplified, wolframUrl, reverseMapping } = equationResultForWolfram;
         // Log to console
         console.log('📊 Equations:', simplified.length);
         console.log(simplified.join('\n'));
@@ -518,7 +518,7 @@ export class Creator extends GeometryTool {
         console.log('\n🔗 Wolfram Alpha URL:', wolframUrl);
         
         // Open in new window
-        window.open(wolframUrl, '_blank');
+        // window.open(wolframUrl, '_blank');
         
         this.updateStatus(`📊 Extracted ${simplified.length} equations → Wolfram Alpha`);
     }
@@ -547,7 +547,7 @@ export class Creator extends GeometryTool {
                 this.handleAngleValueCalculated(angle);
             }
 
-            const { allSolved, executionTime, iterations, solved } = solve({
+            const { executionTime, score, solved } = solve({
                 angles: this.angles,
                 lines: this.lines,
                 points: this.points,
@@ -571,17 +571,11 @@ export class Creator extends GeometryTool {
             
             // Log summary to debug panel
             debugLogger.log('Creator.solveAngles', { 
-                iterations,
+                score,
                 angles: `${solved}/${angles.length}`,
                 time: `${executionTime.toFixed(2)}ms`
             });
             
-            console.info('angle:solveCompleted', {
-                iterations,
-                allSolved,
-                solved,
-                executionTimeMs: executionTime
-            });
         } catch (error) {
             console.info('angle:solveFailed', { error });
         }

@@ -1,6 +1,7 @@
 import { createElement, createSelect } from "@/utils/domHelper";
 import type { Angle, AngleEditRequestData, Rect } from "@/types";
 import { Messages, MessagingHub } from "@/MessagingHub";
+import { GREEK_LETTERS } from "@/data/constants";
 
 
 const createPopoverContent = ({ left, top }: Pick<Rect, 'left' | 'top'>) => {
@@ -50,35 +51,7 @@ const createPopoverContent = ({ left, top }: Pick<Rect, 'left' | 'top'>) => {
         step: '5'
     }) as HTMLInputElement;
 
-    // Greek letters
-    const greekLetters = [
-        { letter: 'α', name: 'alpha' },
-        { letter: 'β', name: 'beta' },
-        { letter: 'γ', name: 'gamma' },
-        { letter: 'δ', name: 'delta' },
-        { letter: 'ε', name: 'epsilon' },
-        { letter: 'ζ', name: 'zeta' },
-        { letter: 'η', name: 'eta' },
-        { letter: 'θ', name: 'theta' },
-        { letter: 'ι', name: 'iota' },
-        { letter: 'κ', name: 'kappa' },
-        { letter: 'λ', name: 'lambda' },
-        { letter: 'μ', name: 'mu' },
-        { letter: 'ν', name: 'nu' },
-        { letter: 'ξ', name: 'xi' },
-        { letter: 'ο', name: 'omicron' },
-        { letter: 'π', name: 'pi' },
-        { letter: 'ρ', name: 'rho' },
-        { letter: 'σ', name: 'sigma' },
-        { letter: 'τ', name: 'tau' },
-        { letter: 'υ', name: 'upsilon' },
-        { letter: 'φ', name: 'phi' },
-        { letter: 'χ', name: 'chi' },
-        { letter: 'ψ', name: 'psi' },
-        { letter: 'ω', name: 'omega' }
-    ];
-    
-    const greekButtons = greekLetters.map(({ letter, name }) => 
+    const greekButtons = GREEK_LETTERS.map(({ letter, name }) => 
         createElement('button', {
             class: 'greek-letter-btn',
             'data-letter': letter,

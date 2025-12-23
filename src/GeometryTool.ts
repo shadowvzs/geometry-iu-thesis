@@ -282,8 +282,6 @@ export class GeometryTool {
             }
         });
 
-        // TODO replace this too with a proper line-point association check
-        
         // Check if the moved point is now on any edge (for collinearity)
         // Update existing lines that contain this point
         this.lines.forEach(line => {
@@ -412,8 +410,6 @@ export class GeometryTool {
                 this.fixPointPositionOnEdges(point, intersectedEdges);
             }
             // here we process the intersected edges, so we remove from the edge list
-            // TODO: maybe we not need to filter
-            // edges = edges.filter(e => result.intersectedEdges.includes(e.id));
             intersectedEdges.forEach(edge => {
                 // (line, pairPointIds, pointId)
                 const existingLine = lines.find(l => isEdgeOnThisLine(edge, l));
@@ -445,8 +441,6 @@ export class GeometryTool {
                 const uniquePoints = [...new Set([...line.points, point.id])];
                 const points = sortLinePoints(uniquePoints, this.pointsMap);
                 line.points = points;
-                // TODO: maybe we not need to filter
-                // edges = edges.filter(e => !isEdgeOnThisLine(e, line));
             });
         }
 
