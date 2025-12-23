@@ -584,6 +584,7 @@ export class Creator extends GeometryTool {
     checkSolvability = () => {
         // Skip if no angles exist yet
         if (this.angles.length === 0) {
+            this.ui.toolbar.updateFeedback('✖');
             return;
         }
 

@@ -1,5 +1,5 @@
 export const NAME = 'Geometry Tool';
-export const VERSION = '1.2.0';
+export const VERSION = '1.2.1';
 export const GREEK_LETTERS = [
     { letter: 'α', name: 'alpha' },
     { letter: 'β', name: 'beta' },
