@@ -509,13 +509,13 @@ export class Creator extends GeometryTool {
         const equationResultForWolfram = extractEquationsWithWolfram(data);
         const { simplified, wolframUrl, reverseMapping } = equationResultForWolfram;
         // Log to console
-        console.log('📊 Equations:', simplified.length);
-        console.log(simplified.join('\n'));
-        console.log('\n📝 Variable mapping:');
+        console.info('📊 Equations:', simplified.length);
+        console.info(simplified.join('\n'));
+        console.info('\n📝 Variable mapping:');
         reverseMapping.forEach((names, char) => {
-            console.log(`  ${char} = ${names.join(' = ')}`);
+            console.info(`  ${char} = ${names.join(' = ')}`);
         });
-        console.log('\n🔗 Wolfram Alpha URL:', wolframUrl);
+        console.info('\n🔗 Wolfram Alpha URL:', wolframUrl);
         
         // Open in new window
         // window.open(wolframUrl, '_blank');

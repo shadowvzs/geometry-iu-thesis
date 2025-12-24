@@ -128,7 +128,7 @@ export function solveWithEquationsRREF(augmentedMatrix: AugmentedMatrixResult, t
     
     // Convert to unified format
     const solution: Record<string, number> = {};
-    if (partialSolution.type === "unique" || partialSolution.type === "infinite") {
+    if (partialSolution.type === "unique") {
         Object.assign(solution, partialSolution.uniqueVars);
     }
     
@@ -137,7 +137,7 @@ export function solveWithEquationsRREF(augmentedMatrix: AugmentedMatrixResult, t
     const solved = targets.every(target => solution[target] !== undefined);
     const allSolved = Object.values(solution).every(value => value !== undefined);
     const score = totalVars;
-    
+
     return {
         solved,
         allSolved,

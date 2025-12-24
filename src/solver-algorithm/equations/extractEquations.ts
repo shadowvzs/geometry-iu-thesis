@@ -8,6 +8,7 @@ import {
     isSameRay,
 } from '@/utils/mathHelper';
 import { GREEK_LETTERS } from '@/data/constants';
+import { parseEquationSide, isValidVariableName } from './parseEquationHelper';
 
 /**
  * Extract all geometric relationships as string equations without solving.
@@ -991,56 +992,32 @@ export function equationsToAugmentedMatrix(
     equations: string[],
     greekLetters = GREEK_LETTERS
   ): AugmentedMatrixResult {
-    // matches either a-z OR a Greek symbol
+    // matches: Greek letters, normal letters (a-z), or letters + numbers (e.g., a0, b4, α0)
+    const greekLettersStr = greekLetters.map(g => g.letter).join("");
     const variableRegex = new RegExp(
-      `[a-z${greekLetters.map(g => g.letter).join("")}]`,
-      "g"
+      `[${greekLettersStr}a-z]\\d*`,
+      "gi"
     );
   
     // 1️⃣ Collect variables
     const varSet = new Set<string>();
     for (const eq of equations) {
       const matches = eq.match(variableRegex);
-      if (matches) matches.forEach(v => varSet.add(v));
+      if (matches) {
+        matches.forEach(v => {
+          // Validate that it's a valid variable name (Greek letter, normal letter, or letter+number)
+          if (isValidVariableName(v)) {
+            varSet.add(v);
+          }
+        });
+      }
     }
   
     const variables = Array.from(varSet).sort();
     const varIndex: Record<string, number> = {};
     variables.forEach((v, i) => (varIndex[v] = i));
   
-    // 2️⃣ Parse expression
-    function parseExpr(expr: string, sign: number, row: number[]): void {
-      expr = expr.replace(/-/g, "+-");
-      const terms = expr.split("+").filter(Boolean);
-  
-      for (const term of terms) {
-        // constant
-        if (/^-?\d+(\.\d+)?$/.test(term)) {
-          row[row.length - 1] += sign * Number(term);
-          continue;
-        }
-  
-        // coefficient + variable (Latin or Greek)
-        const match = term.match(
-          new RegExp(`^(-?\\d*)(${variableRegex.source})$`)
-        );
-  
-        if (!match) {
-          throw new Error(`Invalid term: ${term}`);
-        }
-  
-        let [, coeff, variable] = match;
-        let numericCoeff: number;
-  
-        if (coeff === "" || coeff === "+") numericCoeff = 1;
-        else if (coeff === "-") numericCoeff = -1;
-        else numericCoeff = Number(coeff);
-  
-        row[varIndex[variable]] += sign * numericCoeff;
-      }
-    }
-  
-    // 3️⃣ Build augmented matrix
+    // 2️⃣ Build augmented matrix
     const augmentedMatrix = equations.map(eq => {
       const row = new Array(variables.length + 1).fill(0);
       const clean = eq.replace(/\s+/g, "");
@@ -1049,10 +1026,27 @@ export function equationsToAugmentedMatrix(
       if (!lhs || !rhs) {
         throw new Error(`Invalid equation: ${eq}`);
       }
-  
-      parseExpr(lhs, 1, row);
-      parseExpr(rhs, -1, row);
-  
+
+      // Create validator that checks if variable exists in varIndex
+      // Note: We don't need to check regex pattern here since we've already
+      // collected all valid variables from the equations using variableRegex
+      const validator = (varName: string) => {
+        return varIndex.hasOwnProperty(varName);
+      };
+
+      // Parse LHS (positive) and RHS (negative)
+      const lhsTerms = parseEquationSide(lhs, 1, validator);
+      const rhsTerms = parseEquationSide(rhs, -1, validator);
+
+      // Combine all terms into row
+      [...lhsTerms, ...rhsTerms].forEach(term => {
+        if (term.isConstant) {
+          row[row.length - 1] += term.coefficient;
+        } else if (term.variable && varIndex.hasOwnProperty(term.variable)) {
+          row[varIndex[term.variable]] += term.coefficient;
+        }
+      });
+
       // move constant to RHS
       row[row.length - 1] *= -1;
       return row;

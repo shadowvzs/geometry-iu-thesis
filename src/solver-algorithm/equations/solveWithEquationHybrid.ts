@@ -10,6 +10,8 @@
 // =====================================================
 
 import { SolvedEquation } from "@/types";
+import { parseEquationSide, isValidVariableName } from "./parseEquationHelper";
+import { GREEK_LETTERS } from '@/data/constants';
 
 type LinearExpr = {
   coeffs: Map<string, number>;
@@ -24,15 +26,21 @@ function formatNumber(x: number, eps = 1e-9): number {
 }
 
 // ---------- Extract variables automatically ----------
+// Pattern: Greek letters, normal letters (a-z), or letters + numbers (e.g., a0, b4, α0)
 function extractVariables(equations: string[]): string[] {
   const varSet = new Set<string>();
-  const identifierRegex = /[\p{L}][\p{L}\p{N}]*/gu;
+  // Match: letter (Greek or Latin) optionally followed by digits
+  const greekLetters = GREEK_LETTERS.map(g => g.letter).join('');
+  const variableRegex = new RegExp(`[${greekLetters}a-z]\\d*`, 'gi');
 
   for (const eq of equations) {
-    const matches = eq.match(identifierRegex);
+    const matches = eq.match(variableRegex);
     if (!matches) continue;
     for (const token of matches) {
-      if (!/^\d+$/.test(token)) varSet.add(token);
+      // Validate that it's a valid variable name (not just a number)
+      if (isValidVariableName(token)) {
+        varSet.add(token);
+      }
     }
   }
 
@@ -48,36 +56,24 @@ function parseEquation(eq: string, variables: string[]): LinearExpr {
   if (!lhs || !rhs) throw new Error("Invalid equation: " + eq);
 
   const expr: LinearExpr = { coeffs: new Map(), constant: 0 };
-
-  function parseSide(side: string, sign: number) {
-    side
-      .replace(/-/g, "+-")
-      .split("+")
-      .filter(Boolean)
-      .forEach((term) => {
-        // numeric constant
-        if (/^-?\d+(\.\d+)?$/.test(term)) {
-          expr.constant += sign * Number(term);
-          return;
-        }
-
-        const match = term.match(/^(-?\d*)(.+)$/);
-        if (!match) throw new Error("Invalid term: " + term);
-
-        const [, c, name] = match;
-        if (!variables.includes(name)) {
-          throw new Error(`Unknown variable "${name}"`);
-        }
-
-        const coeff = c === "" ? 1 : c === "-" ? -1 : Number(c);
-
-        expr.coeffs.set(name, (expr.coeffs.get(name) || 0) + sign * coeff);
-      });
-  }
-
-  // LHS positive, RHS negative
-  parseSide(lhs, 1);
-  parseSide(rhs, -1);
+  const varSet = new Set(variables); // For O(1) lookup
+  
+  // Create validator function
+  const validator = (varName: string) => varSet.has(varName);
+  
+  // Parse LHS (positive) and RHS (negative)
+  const lhsTerms = parseEquationSide(lhs, 1, validator);
+  const rhsTerms = parseEquationSide(rhs, -1, validator);
+  
+  // Combine all terms
+  [...lhsTerms, ...rhsTerms].forEach(term => {
+    if (term.isConstant) {
+      expr.constant += term.coefficient;
+    } else if (term.variable) {
+      const current = expr.coeffs.get(term.variable) || 0;
+      expr.coeffs.set(term.variable, current + term.coefficient);
+    }
+  });
 
   // normalize to sum(coeffs) = constant
   expr.constant *= -1;
@@ -200,12 +196,22 @@ function finalEvaluate(equations: LinearExpr[], known: Record<string, number>) {
       );
       if (unknowns.length === 1) {
         const v = unknowns[0];
+        const coeff = eq.coeffs.get(v);
+        if (!coeff || Math.abs(coeff) < 1e-10) continue; // Skip if coefficient is zero
         let rhs = eq.constant;
         for (const [name, c] of eq.coeffs.entries()) {
-          if (name !== v) rhs -= c * known[name];
+          if (name !== v) {
+            const value = known[name];
+            if (value !== undefined && !isNaN(value)) {
+              rhs -= c * value;
+            }
+          }
         }
-        known[v] = rhs / eq.coeffs.get(v)!;
-        progress = true;
+        const result = rhs / coeff;
+        if (!isNaN(result) && isFinite(result)) {
+          known[v] = result;
+          progress = true;
+        }
       }
     }
   }

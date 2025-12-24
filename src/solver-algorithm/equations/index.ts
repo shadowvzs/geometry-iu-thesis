@@ -40,8 +40,6 @@ export const solveWithEquations = (data: SolveData, options: SolveOptions): Equa
                 });
         }
     }
-
-
     
     return {
         hybrid: hybridSolution,

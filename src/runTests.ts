@@ -12,6 +12,8 @@ interface TestResult {
     targetSolved: number;
 }
 
+const DEBUG = true;
+
 const runAllTests = () => {
     console.log('='.repeat(80));
     console.log('GEOMETRY SOLVER TEST RUNNER');
@@ -22,8 +24,10 @@ const runAllTests = () => {
 
     testdata.forEach((data, index) => {
         const testName = (data as { name?: string }).name || `testdata${index + 1}`;
-        console.log(`\n[${ index + 1 }/${ testdata.length }] Testing: ${testName}`);
-        console.log('-'.repeat(60));
+        if (DEBUG) {
+            console.log(`\n[${ index + 1 }/${ testdata.length }] Testing: ${testName}`);
+            console.log('-'.repeat(60));
+        }
 
         try {
             // Deserialize and normalize the data
@@ -32,7 +36,9 @@ const runAllTests = () => {
             // Validate the data
             const validation = validateGeometryData(normalizedData);
             if (!validation.isValid) {
-                console.log(`  ❌ Validation failed: ${validation.errors.join(', ')}`);
+                if (DEBUG) {
+                    console.log(`  ❌ Validation failed: ${validation.errors.join(', ')}`);
+                }
                 return;
             }
 
@@ -44,9 +50,11 @@ const runAllTests = () => {
             const targetAngles = enrichedData.angles.filter(a => a.target).length;
             const anglesWithValue = enrichedData.angles.filter(a => a.value != null).length;
 
-            console.log(`  📐 Angles: ${anglesCount} total, ${anglesWithValue} with known values, ${targetAngles} targets`);
-            console.log(`  📊 Triangles: ${enrichedData.triangles.length}`);
-            console.log(`  📏 Lines: ${enrichedData.lines.length}`);
+            if (DEBUG) {
+                console.log(`  📐 Angles: ${anglesCount} total, ${anglesWithValue} with known values, ${targetAngles} targets`);
+                console.log(`  📊 Triangles: ${enrichedData.triangles.length}`);
+                console.log(`  📏 Lines: ${enrichedData.lines.length}`);
+            }
 
             // Run solver
             const solveResult = solve(
@@ -60,7 +68,9 @@ const runAllTests = () => {
                 },
                 {
                     setAngle: (angle: Angle, _reason: string, ruleName: string) => {
-                        console.log(`    ✓ Solved ${angle.name}: ${angle.value}° (${ruleName})`);
+                        if (DEBUG) {
+                            console.log(`    ✓ Solved ${angle.name}: ${angle.value}° (${ruleName})`);
+                        }
                     }
                 }
             );
@@ -78,26 +88,29 @@ const runAllTests = () => {
             });
 
             // Print result
-            console.log(`\n  Results:`);
-            console.log(`    Iterations: ${solveResult.score}`);
-            console.log(`    Time: ${solveResult.executionTime.toFixed(2)}ms`);
-            // console.log(`    Valid: ${solveResult.isValid ? '✅' : '❌'}`);
-            // console.log(`    Solved: ${solvedAngles}/${anglesCount} angles`);
-            if (targetAngles > 0) {
-                console.log(`    Targets: ${targetSolved}/${targetAngles} solved`);
+            if (DEBUG) {
+                console.log(`\n  Results:`);
+                console.log(`    Iterations: ${solveResult.score}`);
+                console.log(`    Time: ${solveResult.executionTime.toFixed(2)}ms`);
+                console.log(`    Solved: ${solvedAngles}/${anglesCount} angles`);
+                if (targetAngles > 0) {
+                    console.log(`    Targets: ${targetSolved}/${targetAngles} solved`);
+                }
+                console.log(`    Score: ${solveResult.score}`);
             }
-            // console.log(`    All Solved: ${solveResult.allSolved ? '✅' : '❌'}`);
-            console.log(`    Score: ${solveResult.score}`);
-
         } catch (error) {
-            console.log(`  ❌ Error: ${error}`);
+            if (DEBUG) {
+                console.log(`  ❌ Error: ${error}`);
+            }
         }
     });
 
     // Summary
-    console.log('\n' + '='.repeat(80));
-    console.log('SUMMARY');
-    console.log('='.repeat(80));
+    if (DEBUG) {
+        console.log('\n' + '='.repeat(80));
+        console.log('SUMMARY');
+        console.log('='.repeat(80));
+    }
     
     const passed = results.filter(r => r.targetAngles > 0 && r.targetSolved === r.targetAngles);
     const failed = results.filter(r => r.targetAngles === 0 || r.targetSolved !== r.targetAngles);

@@ -182,6 +182,7 @@ export const applySupplementaryAngles = (data: SolveDataWithMaps, log: LogFn): b
             if (!validation.valid) return;
             
             unknownAngles[0].value = value;
+ 
             log(
                 unknownAngles[0],
                 `Supplementary angles sum to ${sumTo}°, so ${unknownAngles[0].name} = ${value}°`,

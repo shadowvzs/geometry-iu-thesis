@@ -26,7 +26,7 @@ export const applyTriangleAngleSum = (data: SolveDataWithMaps, log: LogFn): bool
         const triangleAngles = getTriangleAngles(triangle, angles, lines);
 
         if (triangleAngles.length !== 3) {
-            console.warn(`Triangle does not have exactly 3 angles (${triangleArray.toString()})`, triangleAngles);
+            // console.warn(`Triangle does not have exactly 3 angles (${triangleArray.toString()})`, triangleAngles);
             return;
         }
         
@@ -103,7 +103,6 @@ export const applyTriangleAngleSum = (data: SolveDataWithMaps, log: LogFn): bool
         for (const circle of circles) {
             const vertexAngle = searchVertexAngleInIsoscelesTriangle(triangleAngles, circle, lines, triangleArray);
             if (!vertexAngle) continue;
-
             const vertexValue = getAngleValue(vertexAngle);
             if (vertexValue) {
                 const baseAngleValue = (TriangleAngleSum - vertexValue) / 2;

@@ -1,6 +1,7 @@
 import { SolveData, SolveOptions, SolverResults } from "@/types";
 import { solveWithTheorems } from "./theorems";
 import { solveWithEquations } from "./equations";
+import { deepClone } from "@/utils/objectHelper";
 
 export const solve = (data: SolveData, options: SolveOptions): SolverResults => {
     // if no target angles, return early
@@ -33,8 +34,8 @@ export const solve = (data: SolveData, options: SolveOptions): SolverResults => 
         };
     }
 
-    const solvedWithTheorems = solveWithTheorems(data, options);
     const { hybrid, rref } = solveWithEquations(data, options);
+    const solvedWithTheorems = solveWithTheorems(data, options);
     
     const results = {
         theorems: solvedWithTheorems,
@@ -45,6 +46,10 @@ export const solve = (data: SolveData, options: SolveOptions): SolverResults => 
         score: solvedWithTheorems.score || hybrid.score || rref.score,
     };
 
+    if (results.theorems.solved || results.equationHybrid.solved || results.equationRref.solved) {
+        console.log(`Was solved by theorem: ${results.theorems.solved}, hybrid: ${results.equationHybrid.solved}, rref: ${results.equationRref.solved}`);
+    }
+    
     console.log('solver results', results);
     return results;
 };
