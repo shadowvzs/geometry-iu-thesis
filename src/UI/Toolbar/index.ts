@@ -3,6 +3,8 @@ import { createElement } from "../../utils/domHelper";
 import { MessagingHub, Messages } from "../../MessagingHub";
 import { ButtonConfig, getDefaultButtonConfigs } from "./defaultButtons";
 import { ExportImageType } from "@/types";
+import testdata from "../../data/index";
+import type { SerializedGeometryData } from "@/types";
 
 
 interface ButtonInfo {
@@ -17,6 +19,7 @@ export class Toolbar {
     private problemNameInput: HTMLInputElement | null;
     private problemNameElement: HTMLElement | null;
     private problemNameButton: HTMLElement | null;
+    private loadTestdataButton: HTMLElement | null;
     container!: HTMLElement;
     private feedback!: HTMLElement;
     private buttons!: HTMLElement;
@@ -29,9 +32,15 @@ export class Toolbar {
         this.problemNameInput = null;
         this.problemNameElement = null;
         this.problemNameButton = null;
+        this.loadTestdataButton = null;
         // Subscribe to status updates
         this.messagingHub.subscribe(Messages.STATUS_UPDATE, (message: string) => {
             this.updateStatus(message);
+        });
+        
+        // Subscribe to feedback updates
+        this.messagingHub.subscribe(Messages.FEEDBACK_UPDATE, (text: string | number) => {
+            this.updateFeedback(text);
         });
     }
 
@@ -40,6 +49,8 @@ export class Toolbar {
         this.problemNameElement = createElement('div', { class: 'problem-name' }, ['Untitled problem']) as HTMLElement;
         this.problemNameButton = createElement('button', { class: 'problem-name-button' }, ['Edit']) as HTMLElement;
         this.problemNameButton.addEventListener('click', this.updateProblemName);
+        this.loadTestdataButton = createElement('button', { class: 'problem-name-button' }, ['Load Predefined Data']) as HTMLElement;
+        this.loadTestdataButton.addEventListener('click', this.showLoadTestdataDialog);
         this.container = createElement('div', { class: 'toolbar' }, [
             ['header', { class: 'toolbar-header' }, [
                 ['section', { class: 'page-title-section' }, [
@@ -47,6 +58,7 @@ export class Toolbar {
                     this.problemNameInput,
                     this.problemNameElement,
                     this.problemNameButton,
+                    this.loadTestdataButton,
                 ]],
                 ['div', { class: 'toolbar-feedback hide' }, []]
             ]],
@@ -68,8 +80,20 @@ export class Toolbar {
         this.problemNameInput.value = name;
         this.problemNameElement.textContent = name;
         this.problemNameElement.title = name;
-        if (locked && this.problemNameButton) {
-            this.problemNameButton.classList.add('hide');
+        if (locked) {
+            if (this.problemNameButton) {
+                this.problemNameButton.classList.add('hide');
+            }
+            if (this.loadTestdataButton) {
+                this.loadTestdataButton.classList.add('hide');
+            }
+        } else {
+            if (this.problemNameButton) {
+                this.problemNameButton.classList.remove('hide');
+            }
+            if (this.loadTestdataButton) {
+                this.loadTestdataButton.classList.remove('hide');
+            }
         }
     }
 
@@ -153,6 +177,68 @@ export class Toolbar {
 
     public updateFeedback = (text: string | number): void => {
         this.feedback.textContent = String(text);
+    }
+
+    private showLoadTestdataDialog = (): void => {
+        // Remove any existing dialogs
+        document.querySelectorAll('.testdata-dialog').forEach(el => el.remove());
+        
+        const dialog = createElement('div', { class: 'testdata-dialog' }) as HTMLElement;
+        
+        // Create list of testdata items
+        const testdataList = createElement('div', { class: 'testdata-list' }) as HTMLElement;
+
+        // we want the most recent to be at the top
+        const sortedTestdata = [...testdata].reverse();
+        
+        sortedTestdata.forEach((data, index) => {
+            const testName = (data as { name?: string }).name || `Test Data ${index + 1}`;
+            const item = createElement('div', { 
+                class: 'testdata-item',
+                title: testName,
+                'data-index': String(index)
+            }, [testName]) as HTMLElement;
+            
+            item.addEventListener('click', () => {
+                this.messagingHub.emit(Messages.DATA_LOAD_REQUESTED, data as SerializedGeometryData);
+                dialog.remove();
+                this.messagingHub.emit(Messages.STATUS_UPDATE, `✅ Loaded: ${testName}`);
+            });
+            
+            testdataList.appendChild(item);
+        });
+        
+        dialog.appendChild(createElement('div', { class: 'testdata-dialog-content' }, [
+            createElement('h3', {}, ['Load Test Data']),
+            testdataList,
+            createElement('div', { class: 'testdata-dialog-buttons' }, [
+                createElement('button', { id: 'testdataCancel' }, ['Cancel'])
+            ])
+        ]));
+        
+        document.body.appendChild(dialog);
+        
+        // Close on cancel button
+        document.getElementById('testdataCancel')!.addEventListener('click', () => {
+            dialog.remove();
+        });
+        
+        // Close on Escape key
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                dialog.remove();
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+        
+        // Close on click outside
+        dialog.addEventListener('click', (e) => {
+            if (e.target === dialog) {
+                dialog.remove();
+                document.removeEventListener('keydown', handleEscape);
+            }
+        });
     }
 }
 

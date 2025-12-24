@@ -145,7 +145,9 @@ export const Messages = {
     STATUS_UPDATE: 'ui:statusUpdate',
     PANEL_UPDATE: 'ui:panelUpdate',
     TOOLBAR_UPDATE: 'ui:toolbarUpdate',
+    FEEDBACK_UPDATE: 'ui:feedbackUpdate',
     DATA_LOAD_REQUESTED: 'ui:dataLoadRequested',
+    LOAD_TESTDATA_REQUESTED: 'ui:loadTestdataRequested',
 
     // Definition Events
     DEFINITION_ADDED: 'definition:added',

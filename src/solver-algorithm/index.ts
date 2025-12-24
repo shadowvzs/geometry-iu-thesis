@@ -1,7 +1,18 @@
 import { SolveData, SolveOptions, SolverResults } from "@/types";
 import { solveWithTheorems } from "./theorems";
 import { solveWithEquations } from "./equations";
-import { deepClone } from "@/utils/objectHelper";
+
+// shallow clone for the solve data
+const shallowClone = (data: SolveData): SolveData => {
+    return {
+        angles: data.angles.map(a => ({ ...a })),
+        points: data.points.map(p => ({ ...p })),
+        edges: data.edges.map(e => ({ ...e })),
+        lines: data.lines.map(l => ({ ...l })),
+        triangles: data.triangles.map(t => Array.from(t)),
+        circles: data.circles.map(c => ({ ...c })),
+    }
+};
 
 export const solve = (data: SolveData, options: SolveOptions): SolverResults => {
     // if no target angles, return early
@@ -13,6 +24,7 @@ export const solve = (data: SolveData, options: SolveOptions): SolverResults => 
                 score: 0,
                 executionTime: 0,
                 iterations: 0,
+                solvedAngles: {},
             },
             equationHybrid: {
                 solved: false,
@@ -34,21 +46,21 @@ export const solve = (data: SolveData, options: SolveOptions): SolverResults => 
         };
     }
 
-    const { hybrid, rref } = solveWithEquations(data, options);
-    const solvedWithTheorems = solveWithTheorems(data, options);
+    const clonedData1 = shallowClone(data);
+    const { hybrid, rref, solvedAngles: solvedAnglesWithEquations } = solveWithEquations(clonedData1, options);
+    const clonedData2 = shallowClone(data);
+    const solvedWithTheorems = solveWithTheorems(clonedData2, options);
     
     const results = {
         theorems: solvedWithTheorems,
         equationHybrid: hybrid,
         equationRref: rref,
+        solvedAnglesWithEquations,
+        solvedAnglesWithTheorems: solvedWithTheorems.solvedAngles,
         solved: solvedWithTheorems.solved || hybrid.solved || rref.solved,
         executionTime: solvedWithTheorems.executionTime + hybrid.executionTime + rref.executionTime,
         score: solvedWithTheorems.score || hybrid.score || rref.score,
     };
-
-    if (results.theorems.solved || results.equationHybrid.solved || results.equationRref.solved) {
-        console.log(`Was solved by theorem: ${results.theorems.solved}, hybrid: ${results.equationHybrid.solved}, rref: ${results.equationRref.solved}`);
-    }
     
     console.log('solver results', results);
     return results;

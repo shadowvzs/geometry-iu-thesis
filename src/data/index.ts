@@ -16,18 +16,19 @@ import testdata15 from './testdata15.json';
 import testdata16 from './testdata16.json';
 import testdata17 from './testdata17.json';
 import testdata18 from './testdata18.json';
-import testdata19 from './testdata19.json';
-import testdata20 from './testdata20.json';
-import testdata21 from './testdata21.json';
-import testdata22 from './testdata22.json';
-import testdata23 from './testdata23.json';
-import testdata24 from './testdata24.json';
-import testdata25 from './testdata25.json';
-import testdata26 from './testdata26.json';
-import testdata27 from './testdata27.json';
-import testdata28 from './testdata28.json';
-import testdata29 from './testdata29.json';
-import testdata30 from './testdata30.json';
+
+import eigenmann1 from './eigenmann1.json';
+import eigenmann3 from './eigenmann3.json';
+import eigenmann5 from './eigenmann5.json';
+import eigenmann9 from './eigenmann9.json';
+import eigenmann11 from './eigenmann11.json';
+import eigenmann13 from './eigenmann13.json';
+import eigenmann15 from './eigenmann15.json';
+import eigenmann17 from './eigenmann17.json';
+import eigenmann19 from './eigenmann19.json';
+import eigenmann145 from './eigenmann145.json';
+import eigenmann149 from './eigenmann149.json';
+import eigenmann170 from './eigenmann170.json';
 
 const testdata = [
     testdata1,
@@ -48,18 +49,19 @@ const testdata = [
     testdata16,
     testdata17,
     testdata18,
-    testdata19,
-    testdata20,
-    testdata21,
-    testdata22,
-    testdata23,
-    testdata24,
-    testdata25,
-    testdata26,
-    testdata27,
-    testdata28,
-    testdata29,
-    testdata30,
+
+    eigenmann1,
+    eigenmann3,
+    eigenmann5,
+    eigenmann9,
+    eigenmann11,
+    eigenmann13,
+    eigenmann15,
+    eigenmann17,
+    eigenmann19,
+    eigenmann145,
+    eigenmann149,
+    eigenmann170,
 ];
 
 export default testdata;

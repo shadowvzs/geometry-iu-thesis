@@ -34,7 +34,8 @@ import type {
     AngleClickData,
     PointDraggingData,
     UpdateAngleData,
-    SolverResults
+    SolverResults,
+    SolveData
 } from './types';
 import { GeometryTool } from './GeometryTool';
 import { testdata } from './testdata';
@@ -498,6 +499,7 @@ export class Creator extends GeometryTool {
         }
         const data = deepClone({
             angles: this.angles,
+            edges: this.edges,
             lines: this.lines,
             points: this.points,
             triangles: this.triangles.map(tri => Array.from(tri)),
@@ -551,9 +553,9 @@ export class Creator extends GeometryTool {
                 angles: this.angles,
                 lines: this.lines,
                 points: this.points,
-                triangles: this.triangles,
+                edges: this.edges,
+                triangles: this.triangles.map(tri => Array.from(tri)),
                 circles: this.circles,
-                adjacentPoints: this.adjacentPoints
             }, {
                 setAngle: setAngleCallback,
                 maxIterations: 100
@@ -584,25 +586,25 @@ export class Creator extends GeometryTool {
     checkSolvability = () => {
         // Skip if no angles exist yet
         if (this.angles.length === 0) {
-            this.ui.toolbar.updateFeedback('✖');
+            this.messagingHub.emit(Messages.FEEDBACK_UPDATE, '✖');
             return;
         }
 
         // Create deep copies of data to avoid the solver modifying originals
-        const data = deepClone({
+        const data: SolveData = deepClone({
             angles: this.angles,
             lines: this.lines,
             points: this.points,
+            edges: this.edges,
             triangles: this.triangles.map(tri => Array.from(tri)),
             circles: this.circles,
-            adjacentPoints: this.adjacentPoints
         });
         const { executionTime, solved } = solve(data, {
             setAngle: () => { },
             maxIterations: 100
         });
 
-        this.ui.toolbar.updateFeedback(solved ? '✔' : '✖');
+        this.messagingHub.emit(Messages.FEEDBACK_UPDATE, solved ? '✔' : '✖');
         console.info(`Can be solved: ${solved} (${executionTime.toFixed(2)}ms)`);
     }
 

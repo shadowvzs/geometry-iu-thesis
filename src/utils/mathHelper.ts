@@ -685,6 +685,32 @@ export const findPointNeighbors = (point: Point, edges: Edge[], pointsMap: Map<s
     return neighbors;
 };
 
+/**
+ * Build adjacentPoints map from edges
+ * @param edges - Array of edges with points property
+ * @returns Map<string, Set<string>> where each point maps to its adjacent points
+ */
+export function buildAdjacentPointsFromEdges(edges: { points: string[] }[]): Map<string, Set<string>> {
+    const adjacentPoints = new Map<string, Set<string>>();
+    
+    const addAdjacentPoint = (pointId: string, adjacentPointId: string): void => {
+        if (!adjacentPoints.has(pointId)) {
+            adjacentPoints.set(pointId, new Set());
+        }
+        adjacentPoints.get(pointId)!.add(adjacentPointId);
+    };
+    
+    edges.forEach(edge => {
+        if (edge.points && edge.points.length === 2) {
+            const [p1, p2] = edge.points;
+            addAdjacentPoint(p1, p2);
+            addAdjacentPoint(p2, p1);
+        }
+    });
+    
+    return adjacentPoints;
+}
+
 export const isThisAngle = (angle: Angle, vertexId: string, point1: string, point2: string): boolean => {
     return angle.pointId === vertexId &&
         angle.sidepoints &&

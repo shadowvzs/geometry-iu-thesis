@@ -62,9 +62,9 @@ const runAllTests = () => {
                     angles: enrichedData.angles,
                     points: enrichedData.points,
                     lines: enrichedData.lines,
+                    edges: enrichedData.edges,
                     triangles: enrichedData.triangles,
                     circles: enrichedData.circles,
-                    adjacentPoints: enrichedData.adjacentPoints,
                 },
                 {
                     setAngle: (angle: Angle, _reason: string, ruleName: string) => {

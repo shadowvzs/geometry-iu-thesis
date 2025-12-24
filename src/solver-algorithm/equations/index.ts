@@ -2,11 +2,13 @@ import { Angle, EquationSolverResult, SolveData, SolveOptions } from "@/types";
 import { equationsToAugmentedMatrix, extractEquations, simplifyEquations } from "./extractEquations";
 import { solveWithEquationHybrid } from "./solveWithEquationHybrid";
 import { solveWithEquationsRREF } from "./solveWithEquationsRREF";
-import { getAngleMapsByPointId } from "@/utils/mathHelper";
+import { buildAdjacentPointsFromEdges, getAngleMapsByPointId } from "@/utils/mathHelper";
 
 export const solveWithEquations = (data: SolveData, options: SolveOptions): EquationSolverResult => {
     const angleMapsByPointId = getAngleMapsByPointId(data.angles);
-    const dataWithMaps = { ...data, angleMapsByPointId };
+    const adjacentPoints = buildAdjacentPointsFromEdges(data.edges);
+    const dataWithMaps = { ...data, angleMapsByPointId, adjacentPoints };
+
     const equations = extractEquations(dataWithMaps);
     const { equations: simplifiedEquations, mapping, reverseMapping } = simplifyEquations(equations, dataWithMaps);
     const augmentedMatrix = equationsToAugmentedMatrix(simplifiedEquations);
@@ -18,6 +20,7 @@ export const solveWithEquations = (data: SolveData, options: SolveOptions): Equa
         .filter(name => name !== undefined) as string[];
     const hybridSolution = solveWithEquationHybrid(simplifiedEquations, targets);
     const rrefSolution = solveWithEquationsRREF(augmentedMatrix, targets);
+    const solvedAngles: Record<string, number> = {};
     if (options.setAngle) {
         const setAngle = options.setAngle;
         const unifiedSolutions = { ...hybridSolution.solution, ...rrefSolution.solution };
@@ -30,19 +33,21 @@ export const solveWithEquations = (data: SolveData, options: SolveOptions): Equa
             const angleNames = reverseMapping.get(name);
             if (!angleNames) { continue; }
             angleNames
-                .map(name => angleMap.get(name))
-                .filter(angle => angle !== undefined)
-                .forEach(angle => {
-                    if (typeof angle.value !== 'number') { 
-                        angle.value = value;
-                    }
-                    setAngle(angle, `Solved by equations, ${name} = ${value}°`, `equation`);
-                });
+            .map(name => angleMap.get(name))
+            .filter(angle => angle !== undefined)
+            .forEach(angle => {
+                solvedAngles[angle.name] = value;
+                if (typeof angle.value !== 'number') { 
+                    angle.value = value;
+                }
+                setAngle(angle, `Solved by equations, ${name} = ${value}°`, `equation`);
+            });
         }
     }
     
     return {
         hybrid: hybridSolution,
         rref: rrefSolution,
+        solvedAngles,
     };
 }

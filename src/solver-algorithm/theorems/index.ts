@@ -1,10 +1,12 @@
-import type { SolveData, SolveOptions, TheoremSolverResult, SolveDataWithMaps } from '@/types';
+import type { SolveOptions, TheoremSolverResult, SolveDataWithMaps, SolveData } from '@/types';
 import { 
     areAllTrianglesValid,
     getAngleMapsByPointId,
     getAnglesNeedToBeSolved,
     getAnglesAlreadySolved,
     isSolvedAngle,
+    isUnsolvedAngle,
+    buildAdjacentPointsFromEdges,
 } from '@/utils/mathHelper';
 
 import { applySameLabelAngles } from './applySameLabelAngles';
@@ -28,13 +30,14 @@ const scores: Record<string, number> = {
 };
 
 export const solveWithTheorems = (
-    { angles, points, lines, triangles, circles, adjacentPoints }: SolveData, 
+    { angles, points, lines, triangles, circles, edges }: SolveData, 
     { setAngle, maxIterations = 100 }: SolveOptions
 ): TheoremSolverResult => {
     const startTime = performance.now();
 
     const data: SolveDataWithMaps = {
-        adjacentPoints,
+        adjacentPoints: buildAdjacentPointsFromEdges(edges),
+        edges,
         angles,
         angleMapsByPointId: getAngleMapsByPointId(angles),
         circles,
@@ -43,6 +46,7 @@ export const solveWithTheorems = (
         triangles,
     };
 
+    const unsolvedAngles = angles.filter(a => isUnsolvedAngle(a));
     const anglesNeedToBeSolved = getAnglesNeedToBeSolved(angles);
     let changesMade = true;
     let iterations = 0;
@@ -96,7 +100,15 @@ export const solveWithTheorems = (
     const endTime = performance.now();
     const executionTime = endTime - startTime;
 
+    const solvedAngles: Record<string, number> = {};
+    unsolvedAngles.forEach(angle => {
+        if (angle && typeof angle.value === 'number') {
+            solvedAngles[angle.name] = angle.value;
+        }
+    });
+
     return {
+        solvedAngles,
         executionTime,
         iterations,
         solved,

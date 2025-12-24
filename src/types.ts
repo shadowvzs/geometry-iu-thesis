@@ -496,14 +496,15 @@ export interface UpdateAngleData {
 export interface SolveData {
     angles: Angle[];
     points: Point[];
+    edges: Edge[];
     lines: Line[];
     triangles: Triangle[] | string[][];
     circles: Circle[];
-    adjacentPoints: Map<string, Set<string>>;
 }
 
 export interface SolveDataWithMaps extends SolveData {
     angleMapsByPointId: Record<string, Angle[]>;
+    adjacentPoints: Map<string, Set<string>>;
 }
 
 
@@ -527,6 +528,7 @@ export interface SolverTechniqueResult {
 
 export interface TheoremSolverResult extends SolverTechniqueResult {
     iterations: number;
+    solvedAngles: Record<string, number>;
 }
 
 export interface SolvedEquation extends SolverTechniqueResult {
@@ -536,6 +538,7 @@ export interface SolvedEquation extends SolverTechniqueResult {
 export interface EquationSolverResult {
     hybrid: SolvedEquation;
     rref: SolvedEquation;
+    solvedAngles: Record<string, number>;
 }
 
 export interface SolverResults {

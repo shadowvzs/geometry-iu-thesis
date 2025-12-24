@@ -273,11 +273,12 @@ export class Solver extends GeometryTool {
         if (!targetAngle) { return; }
         const clonedData = deepClone({
             angles: this.angles,
+            edges: this.edges,
             lines: this.lines,
             points: this.points,
             triangles: this.triangles.map(tri => Array.from(tri)),
             circles: this.circles,
-            adjacentPoints: this.adjacentPoints
+            adjacentPoints: this.adjacentPoints.entries()
         });
 
         const { solved, score } = solve(clonedData, {
@@ -287,7 +288,7 @@ export class Solver extends GeometryTool {
 
         console.info('solve', { solved, score });
 
-        this.ui.toolbar.updateFeedback(score || 1);
+        this.messagingHub.emit(Messages.FEEDBACK_UPDATE, score || 1);
         if (!solved) { alert('Warning: Problem could not be fully solved with the given data.'); return; }
 
         const solvedAngle = clonedData.angles.find(a => a.name === targetAngle.name);
