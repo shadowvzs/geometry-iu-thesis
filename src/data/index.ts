@@ -28,7 +28,10 @@ import eigenmann17 from './eigenmann17.json';
 import eigenmann19 from './eigenmann19.json';
 import eigenmann145 from './eigenmann145.json';
 import eigenmann149 from './eigenmann149.json';
+import eigenmann169 from './eigenmann169.json';
 import eigenmann170 from './eigenmann170.json';
+import eigenmann173 from './eigenmann173.json';
+import eigenmann174 from './eigenmann174.json';
 
 const testdata = [
     testdata1,
@@ -61,7 +64,10 @@ const testdata = [
     eigenmann19,
     eigenmann145,
     eigenmann149,
+    eigenmann169,
     eigenmann170,
+    eigenmann173,
+    eigenmann174,
 ];
 
 export default testdata;

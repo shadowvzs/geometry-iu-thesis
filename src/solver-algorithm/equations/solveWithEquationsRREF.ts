@@ -135,7 +135,7 @@ export function solveWithEquationsRREF(augmentedMatrix: AugmentedMatrixResult, t
     // const numSolved = Object.keys(solution).length;
     const totalVars = augmentedMatrix.variables.length;
     const solved = targets.every(target => solution[target] !== undefined);
-    const allSolved = Object.values(solution).every(value => value !== undefined);
+    const allSolved = Object.keys(solution).length > 0 && Object.values(solution).every(value => value !== undefined);
     const score = totalVars;
 
     return {

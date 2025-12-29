@@ -481,6 +481,7 @@ export interface AngleClickData {
 export interface AngleEditRequestData {
     angle: Angle;
     angles?: Angle[];
+    sameAnglesGroups?: Angle[][];
 }
 
 /** Parameters for angle update event */

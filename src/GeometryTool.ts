@@ -29,6 +29,7 @@ import {
     normalizeAngle,
     pointToSegmentDistance,
     sortLinePoints,
+    findSameAnglesGroups,
 } from './utils/mathHelper';
 import { createElement } from './utils/domHelper';
 import {
@@ -1576,7 +1577,8 @@ export class GeometryTool {
     public handleAngleClick(angleData: Angle) {
         if (this.currentTool === 'pointer' || this.currentTool === 'assignAngle') {
             const angles = this.angles.filter(angle => angle.pointId === angleData.pointId);
-            this.messagingHub.emit(Messages.ANGLE_EDIT_REQUESTED, { angle: angleData, angles });
+            const sameAnglesGroups = findSameAnglesGroups(angles, this.lines);
+            this.messagingHub.emit(Messages.ANGLE_EDIT_REQUESTED, { angle: angleData, angles, sameAnglesGroups });
         } else if (this.currentTool === 'angleBisector') {
             this.messagingHub.emit(Messages.ANGLE_BISECTOR_REQUESTED, angleData);
         } else {

@@ -14,7 +14,8 @@ const createPopoverContent = ({ left, top }: Pick<Rect, 'left' | 'top'>) => {
     const nameField = createElement('input', {
         type: 'text',
         id: 'angleNameInput',
-        placeholder: 'Angle name'
+        placeholder: 'Angle name',
+        readonly: 'readonly'
     }) as HTMLInputElement;
       
     const labelField = createElement('input', {
@@ -121,8 +122,12 @@ export const updateAngleEditor = ({
     checkboxElement.checked = angle.target || false;
 }
 
+const getSameAnglesGroup = (angle: Angle, sameAnglesGroups: Angle[][]) => {
+    return sameAnglesGroups.find(group => group.some(a => a.name === angle.name)) || [angle];
+}
+
 let currentAngle: Angle;
-export const ShowAngleEditorPopover = ({ angle, angles = [angle] }: AngleEditRequestData, { left, top }: Rect, messagingHub: MessagingHub): void => {
+export const ShowAngleEditorPopover = ({ angle, angles = [angle], sameAnglesGroups = [] }: AngleEditRequestData, { left, top }: Rect, messagingHub: MessagingHub): void => {
     if (currentAngle && currentAngle.groupElement) {
         currentAngle.groupElement.classList.remove('selected');
     }
@@ -182,11 +187,13 @@ export const ShowAngleEditorPopover = ({ angle, angles = [angle] }: AngleEditReq
 
     // allow user to change the current angle
     const setAngle = (ang: Angle) => {
-        if (currentAngle && currentAngle.groupElement) {
-            currentAngle.groupElement.classList.remove('selected');
+        if (currentAngle) {
+            const angleGroup = getSameAnglesGroup(currentAngle, sameAnglesGroups);
+            angleGroup.forEach(a => a.groupElement?.classList.remove('selected'));
         }
         currentAngle = ang;
-        ang.groupElement?.classList.add('selected');
+        const angleGroup = getSameAnglesGroup(currentAngle, sameAnglesGroups);
+        angleGroup.forEach(a => a.groupElement?.classList.add('selected'));
         updateAngleEditor(elements, currentAngle);
     };
     
@@ -209,17 +216,20 @@ export const ShowAngleEditorPopover = ({ angle, angles = [angle] }: AngleEditReq
     // Auto-save function
     const autoSave = (): void => {
         const inputValue = parseFloat(elements.valueField.value.trim()); 
-        const name = elements.nameField.value;
         const label = elements.labelField.value;
         const value = isNaN(inputValue) ? null : inputValue;
         const radius = parseFloat(elements.radiusField.value);
-        
-        messagingHub.emit(Messages.ANGLE_UPDATED, {
-            angle: currentAngle,
-            name,
-            label,
-            value,
-            radius
+        // update for all angles in the same group
+        const sameAngles = getSameAnglesGroup(currentAngle, sameAnglesGroups);
+
+        sameAngles.forEach(a => {
+            messagingHub.emit(Messages.ANGLE_UPDATED, {
+                angle: a,
+                name: a.name,
+                label,
+                value,
+                radius
+            });
         });
     };
     
@@ -260,9 +270,8 @@ export const ShowAngleEditorPopover = ({ angle, angles = [angle] }: AngleEditReq
     const onClose = () => {
         document.querySelectorAll('.angle-editor-container').forEach(el => el.remove());
         elements.container.remove();
-        if (currentAngle && currentAngle.groupElement) {
-            currentAngle.groupElement.classList.remove('selected');
-        }
+        const angleGroup = getSameAnglesGroup(currentAngle, sameAnglesGroups);
+        angleGroup.forEach(a => a.groupElement?.classList.remove('selected'));
     }
 
     elements.closeAngleBtn.addEventListener('click', onClose);

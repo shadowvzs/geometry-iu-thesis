@@ -47,9 +47,9 @@ export const solve = (data: SolveData, options: SolveOptions): SolverResults => 
     }
 
     const clonedData1 = shallowClone(data);
-    const { hybrid, rref, solvedAngles: solvedAnglesWithEquations } = solveWithEquations(clonedData1, options);
     const clonedData2 = shallowClone(data);
     const solvedWithTheorems = solveWithTheorems(clonedData2, options);
+    const { hybrid, rref, solvedAngles: solvedAnglesWithEquations } = solveWithEquations(clonedData1, options);
     
     const results = {
         theorems: solvedWithTheorems,
