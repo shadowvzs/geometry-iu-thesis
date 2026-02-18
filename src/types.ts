@@ -547,6 +547,7 @@ export interface SolverResults {
     equationHybrid: SolvedEquation;
     equationRref: SolvedEquation;
     solved: boolean;
+    solvedAngles: Record<string, number>;
     score: number;
     executionTime: number;
 }

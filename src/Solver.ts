@@ -281,17 +281,23 @@ export class Solver extends GeometryTool {
             adjacentPoints: this.adjacentPoints.entries()
         });
 
-        const { solved, score } = solve(clonedData, {
+        const results = solve(clonedData, {
             setAngle: () => { },
             maxIterations: 100
         });
 
+        const { solved, score } = results;
         console.info('solve', { solved, score });
 
         this.messagingHub.emit(Messages.FEEDBACK_UPDATE, score || 1);
         if (!solved) { alert('Warning: Problem could not be fully solved with the given data.'); return; }
 
-        const solvedAngle = clonedData.angles.find(a => a.name === targetAngle.name);
+        const expectedValue = results.solvedAngles?.[targetAngle?.name];
+        if (expectedValue === null) {
+            alert('No expected value to compare against.');
+            return;
+        }
+        const solvedAngle = { ...targetAngle, value: expectedValue };
         this.ui.panels.getPanel<ResultPanel>('result')?.updatePanel(
             targetAngle,
             solvedAngle!

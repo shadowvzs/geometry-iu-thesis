@@ -38,6 +38,9 @@ export const extractEquations = (data: SolveDataWithMaps): string[] => {
     
     // 6. Isosceles triangle equations
     extractIsoscelesEquations(data, equations);
+
+    // 6b. Triangle congruence equations (currently SSS)
+    extractTriangleCongruenceEquations(data, equations);
     
     // 7. Mirror (vertical) angles equations
     extractMirrorAnglesEquations(data, equations);
@@ -339,6 +342,29 @@ const extractIsoscelesEquations = (
         return angle;
     };
 
+    const segKey = (a: string, b: string): string => {
+        return a < b ? `${a}-${b}` : `${b}-${a}`;
+    };
+
+    // Derived equal-length segments from circles:
+    // For each circle, every (center, pointOnCircle) segment is a radius, grouped by numeric radius.
+    const segmentRadiusGroup = new Map<string, number>();
+    circles.forEach(circle => {
+        const center = circle.centerPoint;
+        const r = circle.radius;
+        (circle.pointsOnLine || []).forEach(p => {
+            if (!p || p === center) return;
+            const key = segKey(center, p);
+            const existing = segmentRadiusGroup.get(key);
+            if (existing === undefined) {
+                segmentRadiusGroup.set(key, r);
+            } else if (Math.abs(existing - r) > 1e-9) {
+                // Conflicting radius claims for the same segment: drop it (treat as unknown).
+                segmentRadiusGroup.delete(key);
+            }
+        });
+    });
+
     // ============================================
     // First: Check circles directly for isosceles triangles
     // This catches cases where the triangle isn't explicitly defined
@@ -458,7 +484,149 @@ const extractIsoscelesEquations = (
                 addIsoscelesEquation(sameLabel[0], sameLabel[1]);
             }
         });
+
+        // Check for isosceles by equal side lengths (derived from equal-radius circles)
+        // If two sides share the same radius-group, then the triangle is isosceles.
+        if (triangleArray.length === 3) {
+            const [a, b, c] = triangleArray;
+            const ab = segmentRadiusGroup.get(segKey(a, b));
+            const ac = segmentRadiusGroup.get(segKey(a, c));
+            const bc = segmentRadiusGroup.get(segKey(b, c));
+
+            const addBaseAnglesForApex = (apex: string, s1: string, s2: string) => {
+                // apex-s1 == apex-s2 => base angles at s1 and s2 equal
+                const baseAtS1 = findBaseAngle(s1, apex, s2);
+                const baseAtS2 = findBaseAngle(s2, apex, s1);
+                if (baseAtS1 && baseAtS2) {
+                    addIsoscelesEquation(baseAtS1, baseAtS2);
+                }
+            };
+
+            if (ab !== undefined && ac !== undefined && Math.abs(ab - ac) < 1e-9) {
+                addBaseAnglesForApex(a, b, c);
+            }
+            if (ab !== undefined && bc !== undefined && Math.abs(ab - bc) < 1e-9) {
+                addBaseAnglesForApex(b, a, c);
+            }
+            if (ac !== undefined && bc !== undefined && Math.abs(ac - bc) < 1e-9) {
+                addBaseAnglesForApex(c, a, b);
+            }
+        }
     });
+};
+
+/**
+ * Triangle congruence (currently SSS).
+ *
+ * Uses derived equal-length segments (from circles) plus identity-equality for shared segments.
+ * If two triangles are congruent by SSS, then corresponding angles are equal.
+ */
+const extractTriangleCongruenceEquations = (
+    { triangles, circles, angles, lines }: SolveDataWithMaps,
+    equations: string[]
+): void => {
+    if (triangles.length < 2 || circles.length === 0) return;
+
+    const segKey = (a: string, b: string): string => (a < b ? `${a}-${b}` : `${b}-${a}`);
+
+    const segmentRadiusGroup = new Map<string, number>();
+    circles.forEach(circle => {
+        const center = circle.centerPoint;
+        const r = circle.radius;
+        (circle.pointsOnLine || []).forEach(p => {
+            if (!p || p === center) return;
+            const key = segKey(center, p);
+            const existing = segmentRadiusGroup.get(key);
+            if (existing === undefined) segmentRadiusGroup.set(key, r);
+            else if (Math.abs(existing - r) > 1e-9) segmentRadiusGroup.delete(key);
+        });
+    });
+
+    const findAngleByRays = (vertex: string, sidepoint1: string, sidepoint2: string): Angle | undefined => {
+        let angle = angles.find(a =>
+            a.pointId === vertex &&
+            a.sidepoints.includes(sidepoint1) &&
+            a.sidepoints.includes(sidepoint2)
+        );
+        if (angle) return angle;
+
+        angle = angles.find(a => {
+            if (a.pointId !== vertex) return false;
+            const [sp1, sp2] = a.sidepoints;
+            const match1 = (sp1 === sidepoint1 || isSameRay(sp1, sidepoint1, vertex, lines)) &&
+                          (sp2 === sidepoint2 || isSameRay(sp2, sidepoint2, vertex, lines));
+            const match2 = (sp1 === sidepoint2 || isSameRay(sp1, sidepoint2, vertex, lines)) &&
+                          (sp2 === sidepoint1 || isSameRay(sp2, sidepoint1, vertex, lines));
+            return match1 || match2;
+        });
+
+        return angle;
+    };
+
+    const sideEqual = (p: string, q: string, r: string, s: string): boolean => {
+        const k1 = segKey(p, q);
+        const k2 = segKey(r, s);
+        if (k1 === k2) return true; // same segment (shared side)
+        const g1 = segmentRadiusGroup.get(k1);
+        const g2 = segmentRadiusGroup.get(k2);
+        return g1 !== undefined && g2 !== undefined && Math.abs(g1 - g2) < 1e-9;
+    };
+
+    const asTriangleArray = (t: Triangle | string[]): [string, string, string] | null => {
+        const arr = t instanceof Set ? Array.from(t) : t;
+        if (!Array.isArray(arr) || arr.length !== 3) return null;
+        return [arr[0], arr[1], arr[2]];
+    };
+
+    const perms: Array<[number, number, number]> = [
+        [0, 1, 2],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+    ];
+
+    for (let i = 0; i < triangles.length; i++) {
+        const t1 = asTriangleArray(triangles[i]);
+        if (!t1) continue;
+        for (let j = i + 1; j < triangles.length; j++) {
+            const t2 = asTriangleArray(triangles[j]);
+            if (!t2) continue;
+
+            // Find a unique vertex mapping that satisfies SSS.
+            const matches: Array<{ map: [string, string, string] }> = [];
+            for (const [p0, p1, p2] of perms) {
+                const mapped: [string, string, string] = [t2[p0], t2[p1], t2[p2]];
+                const [a, b, c] = t1;
+                const [d, e, f] = mapped;
+
+                const ok =
+                    sideEqual(a, b, d, e) &&
+                    sideEqual(b, c, e, f) &&
+                    sideEqual(c, a, f, d);
+                if (ok) matches.push({ map: mapped });
+            }
+
+            if (matches.length !== 1) continue; // ambiguous or no congruence
+
+            const [a, b, c] = t1;
+            const [d, e, f] = matches[0].map;
+
+            // Corresponding angles equal
+            const angA = findAngleByRays(a, b, c);
+            const angD = findAngleByRays(d, e, f);
+            if (angA && angD) equations.push(`${angA.name}=${angD.name}`);
+
+            const angB = findAngleByRays(b, a, c);
+            const angE = findAngleByRays(e, d, f);
+            if (angB && angE) equations.push(`${angB.name}=${angE.name}`);
+
+            const angC = findAngleByRays(c, a, b);
+            const angF = findAngleByRays(f, d, e);
+            if (angC && angF) equations.push(`${angC.name}=${angF.name}`);
+        }
+    }
 };
 
 /**
