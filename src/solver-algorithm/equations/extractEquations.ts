@@ -369,7 +369,7 @@ const extractIsoscelesEquations = (
                 
                 if (vertexAngle && baseAngle1 && baseAngle2) {
                     // Vertex angle: ∠Vertex=180-∠Base1-∠Base2
-                    equations.push(`${vertexAngle.name}=180-${baseAngle1.name}-${baseAngle2.name}`);                   equations.push(`${vertexAngle.name}=180-${baseAngle1.name}-${baseAngle2.name}`);
+                    equations.push(`${vertexAngle.name}=180-${baseAngle1.name}-${baseAngle2.name}`);
                 }
             }
         }

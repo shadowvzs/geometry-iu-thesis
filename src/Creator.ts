@@ -520,7 +520,7 @@ export class Creator extends GeometryTool {
         console.info('\n🔗 Wolfram Alpha URL:', wolframUrl);
         
         // Open in new window
-        // window.open(wolframUrl, '_blank');
+        window.open(wolframUrl, '_blank');
         
         this.updateStatus(`📊 Extracted ${simplified.length} equations → Wolfram Alpha`);
     }

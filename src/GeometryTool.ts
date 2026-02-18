@@ -1587,10 +1587,9 @@ export class GeometryTool {
     }
     
     public redrawAngleArc(angleData: Angle) {
-        // Skip if no DOM elements (shouldn't happen with new logic, but keep for safety)
+        // Skip if no DOM elements (when we edit a non rendered but existing angle, which have an equivalent rendered angle already)
         if (!angleData.groupElement) {
-            console.warn('Angle missing group element:', angleData);
-            return;
+             return;
         }
         
         // Get the path and text from the group

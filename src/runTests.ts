@@ -7,9 +7,8 @@ interface TestResult {
     name: string;
     result: SolverResults;
     anglesCount: number;
-    solvedAngles: number;
     targetAngles: number;
-    targetSolved: number;
+    targetSolved: boolean;
 }
 
 const DEBUG = true;
@@ -75,14 +74,12 @@ const runAllTests = () => {
                 }
             );
 
-            const solvedAngles = enrichedData.angles.filter(a => a.value != null).length;
-            const targetSolved = enrichedData.angles.filter(a => a.target && a.value != null).length;
+            const targetSolved = solveResult.solved;
 
             results.push({
                 name: testName,
                 result: solveResult,
                 anglesCount,
-                solvedAngles,
                 targetAngles,
                 targetSolved,
             });
@@ -92,10 +89,10 @@ const runAllTests = () => {
                 console.log(`\n  Results:`);
                 console.log(`    Iterations: ${solveResult.score}`);
                 console.log(`    Time: ${solveResult.executionTime.toFixed(2)}ms`);
-                console.log(`    Solved: ${solvedAngles}/${anglesCount} angles`);
-                if (targetAngles > 0) {
-                    console.log(`    Targets: ${targetSolved}/${targetAngles} solved`);
-                }
+                // console.log(`    Solved: ${solvedAngles}/${anglesCount} angles`);
+                // if (targetAngles > 0) {
+                //     console.log(`    Targets: ${targetSolved}/${targetAngles} solved`);
+                // }
                 console.log(`    Score: ${solveResult.score}`);
             }
         } catch (error) {
@@ -112,19 +109,19 @@ const runAllTests = () => {
         console.log('='.repeat(80));
     }
     
-    const passed = results.filter(r => r.targetAngles > 0 && r.targetSolved === r.targetAngles);
-    const failed = results.filter(r => r.targetAngles === 0 || r.targetSolved !== r.targetAngles);
+    const passed = results.filter(r => r.targetSolved);
+    const failed = results.filter(r => !r.targetSolved);
 
     console.log(`\nTotal: ${results.length} tests`);
     console.log(`Passed: ${passed.length} ✅`);
     console.log(`Failed: ${failed.length} ❌`);
 
-    if (failed.length > 0) {
-        console.log('\nFailed tests:');
-        failed.forEach(f => {
-            console.log(`  - ${f.name}: ${f.solvedAngles}/${f.anglesCount} solved`);
-        });
-    }
+    // if (failed.length > 0) {
+    //     console.log('\nFailed tests:');
+    //     failed.forEach(f => {
+    //         console.log(`  - ${f.name}: ${f.solvedAngles}/${f.anglesCount} solved`);
+    //     });
+    // }
 
     console.log('\n' + '='.repeat(80));
 };

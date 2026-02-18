@@ -16,9 +16,9 @@ export class UI {
         this.messagingHub = messagingHub;
         
         // UI initialization code here
-        this.toolbar = new Toolbar(messagingHub);
-        this.panels = new PanelManager(messagingHub);
-        this.canvas = new Canvas(messagingHub);
+        this.toolbar = new Toolbar(this.messagingHub);
+        this.panels = new PanelManager(this.messagingHub);
+        this.canvas = new Canvas(this.messagingHub);
     }
 
     initialize(): void {

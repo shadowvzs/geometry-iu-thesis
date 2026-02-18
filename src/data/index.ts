@@ -16,6 +16,7 @@ import testdata15 from './testdata15.json';
 import testdata16 from './testdata16.json';
 import testdata17 from './testdata17.json';
 import testdata18 from './testdata18.json';
+import testdata19 from './testdata19.json';
 
 import eigenmann1 from './eigenmann1.json';
 import eigenmann3 from './eigenmann3.json';
@@ -52,7 +53,7 @@ const testdata = [
     testdata16,
     testdata17,
     testdata18,
-
+    testdata19,
     eigenmann1,
     eigenmann3,
     eigenmann5,

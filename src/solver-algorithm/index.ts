@@ -3,7 +3,7 @@ import { solveWithTheorems } from "./theorems";
 import { solveWithEquations } from "./equations";
 
 // shallow clone for the solve data
-const shallowClone = (data: SolveData): SolveData => {
+const cloneObject = (data: SolveData): SolveData => {
     return {
         angles: data.angles.map(a => ({ ...a })),
         points: data.points.map(p => ({ ...p })),
@@ -46,8 +46,8 @@ export const solve = (data: SolveData, options: SolveOptions): SolverResults => 
         };
     }
 
-    const clonedData1 = shallowClone(data);
-    const clonedData2 = shallowClone(data);
+    const clonedData1 = cloneObject(data);
+    const clonedData2 = cloneObject(data);
     const solvedWithTheorems = solveWithTheorems(clonedData2, options);
     const { hybrid, rref, solvedAngles: solvedAnglesWithEquations } = solveWithEquations(clonedData1, options);
     
